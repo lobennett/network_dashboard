@@ -15,7 +15,7 @@ def content_path(db, study: Path, artifact: dict) -> Path:
     if relative.is_absolute() or ".." in relative.parts or "\\" in str(relative):
         raise HTTPException(403, "File path is outside the allowed dataset")
     if not name.endswith((".html", ".json", ".tsv", ".txt", ".log", ".pdf", ".png", ".jpg",
-                          ".nii", ".nii.gz", ".mgz", ".white", ".pial", ".inflated", ".gii")):
+                          ".nii", ".nii.gz", ".mgz", ".white", ".pial", ".inflated", ".gii", ".svg")):
         raise HTTPException(403, "This file type is not served")
     roots = dataset_roots(db, study)
     root = roots.get(artifact["dataset_id"])

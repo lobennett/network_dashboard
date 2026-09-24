@@ -81,6 +81,48 @@ def test_unregistered_symlink_target_is_forbidden(study, tmp_path):
     assert client(study).get("/api/artifacts/report/content").status_code == 403
 
 
+def test_report_embeds_registered_local_figures_without_external_requests(study):
+    root,index = study
+    report = root / 'report.html'
+    report.write_text('<html><body><object data="./plot.svg" type="image/svg+xml"></object></body></html>')
+    svg = root / 'plot.svg'
+    svg.write_text('<svg xmlns="http://www.w3.org/2000/svg"><text>QC</text></svg>')
+    with sqlite3.connect(index) as db:
+        db.execute("UPDATE artifact_versions SET content_id=? WHERE id='report'", ('sha256:'+hashlib.sha256(report.read_bytes()).hexdigest(),))
+        db.execute('INSERT INTO artifact_versions VALUES (?,?,?,?,?)',('figure','study','plot.svg','sha256:'+hashlib.sha256(svg.read_bytes()).hexdigest(),'{}'))
+    response=client(study).get('/api/artifacts/report/content')
+    assert response.status_code == 200
+    assert 'data:image/svg+xml;base64,' in response.text
+    assert '<object' not in response.text
+    svg.write_text('changed')
+    assert client(study).get('/api/artifacts/report/content').status_code == 409
+
+
+@pytest.mark.parametrize('tag', ['<object data="sub-s03/figures/plot.svg"></object>', '<img src="./sub-s03/figures/plot.svg"/>'])
+def test_report_can_read_figures_from_its_verified_result_archive(study, tag):
+    import json, zipfile
+    root,index = study
+    report=root/'report.html'
+    report.write_text(tag)
+    source=root/'derivatives/origin';source.mkdir(parents=True)
+    archive=source/'results.zip'
+    with zipfile.ZipFile(archive,'w') as z:
+        z.writestr('MRIQC/report.html',report.read_bytes())
+        z.writestr('MRIQC/sub-s03/figures/plot.svg','<svg xmlns="http://www.w3.org/2000/svg"/>')
+    receipt=root/'code/network_fmri/mriqc-evidence.json';receipt.parent.mkdir(parents=True)
+    receipt.write_text(json.dumps({'source_dataset_id':'source','archives':[{
+        'path':'results.zip','sha256':hashlib.sha256(archive.read_bytes()).hexdigest()}]}))
+    with sqlite3.connect(index) as db:
+        db.execute("UPDATE artifact_versions SET content_id=? WHERE id='report'",('sha256:'+hashlib.sha256(report.read_bytes()).hexdigest(),))
+        db.execute('INSERT INTO artifact_versions VALUES (?,?,?,?,?)',('receipt','study',receipt.relative_to(root).as_posix(),'sha256:'+hashlib.sha256(receipt.read_bytes()).hexdigest(),'{}'))
+        db.execute("INSERT INTO artifacts VALUES (1,'derivatives/origin','dataset:source','dataset',NULL)")
+    response=client(study).get('/api/artifacts/report/content')
+    assert response.status_code == 200
+    assert 'data:image/svg+xml;base64,' in response.text
+    with archive.open('ab') as stream: stream.write(b'changed')
+    assert client(study).get('/api/artifacts/report/content').status_code == 409
+
+
 @pytest.mark.parametrize("headers", [
     {"Origin": "https://untrusted.example"},
     {"Origin": "null"},

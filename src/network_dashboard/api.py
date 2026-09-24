@@ -5,7 +5,7 @@ from pathlib import Path
 import re
 
 from fastapi import FastAPI, HTTPException, Query
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
@@ -96,12 +96,20 @@ def create_app(index: Path, study: Path, web: Path | None = None) -> FastAPI:
 
     @app.get("/api/artifacts/{identity}/content")
     def content(identity: str):
+        rendered = None
         with connect(index) as db:
             artifact = get_artifact(db, identity)
             path = content_path(db, study, artifact)
+            if artifact["path"].endswith(".html"):
+                from network_dashboard.reports import inline_figures
+                rendered = inline_figures(db, study, artifact, path)
         headers = {"X-Content-Type-Options": "nosniff", "Cache-Control": "no-store"}
         if artifact["path"].endswith(".html"):
             headers["Content-Security-Policy"] = "sandbox allow-scripts; default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:"
+        elif artifact["path"].endswith(".svg"):
+            headers["Content-Security-Policy"] = "sandbox; default-src 'none'; style-src 'unsafe-inline'"
+        if rendered is not None:
+            return HTMLResponse(rendered, headers=headers)
         return FileResponse(path, filename=Path(artifact["path"]).name,
                             content_disposition_type="inline", headers=headers)
 
