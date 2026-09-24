@@ -1,0 +1,19 @@
+[project]
+name = "network-dashboard"
+version = "0.1.0"
+description = "Local review of Network pipeline provenance and evidence"
+requires-python = ">=3.12"
+dependencies = ["fastapi>=0.115", "uvicorn>=0.30"]
+
+[project.scripts]
+network-dashboard = "network_dashboard.cli:main"
+
+[dependency-groups]
+dev = ["pytest>=8", "httpx>=0.27"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
