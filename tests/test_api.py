@@ -49,6 +49,7 @@ def test_metadata_exposes_refresh_age_and_source(study):
     result = client(study).get("/api/metadata").json()
     assert result["schema_version"] == "2"
     assert result["stale"] is True
+    assert result["conversion_links"] == 0
 
 
 def test_content_is_registered_hashed_and_sandboxed(study):

@@ -32,11 +32,14 @@ def create_app(index: Path, study: Path, web: Path | None = None) -> FastAPI:
             value = {row["key"]: row["value"] for row in db.execute("SELECT * FROM metadata")}
         if value.get("schema_version") != "2":
             raise HTTPException(409, "Rebuild the index with the current network_fmri")
+        with connect(index) as db:
+            conversion_links = db.execute("SELECT COUNT(*) FROM lineage_links WHERE relation='conversion'").fetchone()[0]
         try:
             age = (datetime.now(timezone.utc) - datetime.fromisoformat(value["built_at"])).total_seconds()
         except (KeyError, ValueError, TypeError):
             age = None
-        return {**value, "age_seconds": age, "stale": age is None or age > 900}
+        return {**value, "age_seconds": age, "stale": age is None or age > 900,
+                "conversion_links": conversion_links}
 
     @app.get("/api/subjects")
     def subjects():
