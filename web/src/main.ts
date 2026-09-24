@@ -119,8 +119,10 @@ async function showFile(identity: string) {
           viewer?.cleanup();
           const canvas = element('canvas', '', 'viewer');
           canvas.setAttribute('aria-label', 'Image and surface viewer');
-          panel.querySelector('canvas')?.remove();
-          panel.append(canvas);
+          const frame = element('div', '', 'viewer-frame');
+          frame.append(canvas);
+          panel.querySelector('.viewer-frame')?.remove();
+          panel.append(frame);
           const loaded = await viewFile(canvas, identity, path);
           if (request !== detailRequest) loaded.cleanup(); else viewer = loaded;
         } else {
