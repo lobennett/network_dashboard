@@ -54,7 +54,10 @@ def inline_figures(db, study, artifact, path):
 
     with stack:
         rendered = re.sub(r'<object\b[^>]*>.*?</object\s*>|<img\b[^>]*>', replace_object, original, flags=re.I | re.S)
-        return rendered if rendered != original else None
+        if rendered == original:
+            return None
+        note = '<aside style="padding:12px;background:#fff1d8">Read-only report preview. Scoring and comments are not saved here.</aside>'
+        return re.sub(r'(<body\b[^>]*>)', lambda match: match.group(0) + note, rendered, count=1, flags=re.I)
 
 
 def _report_archive(db, study, artifact, original, stack):
