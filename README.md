@@ -26,8 +26,8 @@ anatomical previews require defacing evidence. Missing annex content must be
 retrieved by the operator with DataLad. Older files may have unrecorded ancestry.
 Surface acceptance criteria await the lab's review protocol.
 
-This implementation is under development. Real-study acceptance on Sherlock is
-pending. Keep study data and indexes off GitHub and public hosting.
+This implementation is under development. Keep study data and indexes off GitHub
+and public hosting.
 
 Checks: `uv run pytest`, then `cd web && npm test && npm run build`.
 
@@ -35,5 +35,8 @@ The local pilot snapshot is in ignored `.local-data/`. It contains real `sub-s03
 review records and selected reports/images copied from Sherlock. Launch it with
 `uv run network-dashboard --index .local-data/records.sqlite --study .local-data/study --web web/dist`.
 The snapshot timestamp is shown in the header; reload after refreshing the index.
-The Scans tab links session/task/run rows to their indexed files. This historical
-pilot lacks conversion receipts, so its DICOM ancestry is explicitly unrecorded.
+Select a pipeline stage, then a scan. **View in NiiVue** opens available images;
+**Open MRIQC report** opens its report. Filter scans by review status or analysis
+exclusion. **Files & provenance** contains sidecars and recorded file history.
+This historical pilot lacks conversion receipts, so its DICOM exclusions and
+ancestry remain unrecorded. The standalone FreeSurfer 8 pilot is still pending.

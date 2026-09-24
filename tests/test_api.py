@@ -169,3 +169,36 @@ def test_one_defaced_input_does_not_clear_another_undefaced_image(study, relatio
         {"path": paths["safe"], "output_sha256": hashlib.sha256(b"safe").hexdigest()}]}))
     assert client(study).get("/api/artifacts/safe/content").status_code == 200
     assert client(study).get("/api/artifacts/output/content").status_code == 403
+
+
+def test_preview_search_marks_missing_and_unsafe_files_without_serving_them(study):
+    with sqlite3.connect(study[1]) as db:
+        db.executemany('INSERT INTO artifact_versions VALUES (?,?,?,?,?)', [
+            ('missing','study','missing_bold.nii.gz','sha256:absent','{}'),
+            ('unsafe','study','sub-s03_T1w.nii.gz','sha256:absent','{}')])
+    result = client(study).get('/api/artifacts?preview=true').json()
+    availability = {r['id']:r['preview_available'] for r in result}
+    assert availability == {'missing':False,'report':True,'unsafe':False}
+    assert 'defacing' in next(r for r in result if r['id']=='unsafe')['preview_reason']
+
+
+def test_stage_files_include_subject_level_outputs_without_neighbor_subjects(study):
+    with sqlite3.connect(study[1]) as db:
+        db.execute("INSERT INTO artifacts VALUES (2,'derivatives/FreeSurfer-8.2.0','dataset:fs','dataset',NULL)")
+        db.executemany('INSERT INTO artifact_versions VALUES (?,?,?,?,?)', [
+            ('surface','fs','subjects/sub-s03/surf/lh.white','sha256:missing','{}'),
+            ('neighbor','fs','subjects/sub-s030/surf/lh.white','sha256:missing','{}'),
+            ('raw','study','sub-s03/ses-01/sub-s03_T1w.nii.gz','sha256:missing','{}')])
+    result = client(study).get('/api/artifacts?subject=s03&dataset_stage=freesurfer').json()
+    assert [r['id'] for r in result] == ['surface']
+
+
+def test_fmriprep_acquisition_and_subject_report_are_filtered_before_limit(study):
+    with sqlite3.connect(study[1]) as db:
+        db.execute("INSERT INTO artifacts VALUES (2,'derivatives/fMRIPrep-25.2.5+pilot','dataset:fprep','dataset',NULL)")
+        db.executemany('INSERT INTO artifact_versions VALUES (?,?,?,?,?)', [
+            ('early','fprep','sub-s03/ses-01/func/sub-s03_ses-01_task-rest_bold.nii.gz','sha256:missing','{}'),
+            ('later','fprep','sub-s03/ses-11/func/sub-s03_ses-11_task-rest_bold.nii.gz','sha256:missing','{}'),
+            ('subject-report','fprep','sub-s03.html','sha256:missing','{}')])
+    result = client(study).get('/api/artifacts?subject=s03&dataset_stage=fmriprep&q=sub-s03_ses-11_task-rest_&include_subject_report=true&limit=2').json()
+    assert {r['id'] for r in result} == {'later','subject-report'}

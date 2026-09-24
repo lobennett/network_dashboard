@@ -1,50 +1,131 @@
-import {element, type RecordRow} from './review';
-
-type ScanData = {entities:RecordRow[]; findings:RecordRow[]; decisions:RecordRow[]};
-
+import { element, type RecordRow } from "./review";
+import {
+  rawScans,
+  reviewMetrics,
+  scanOutcome,
+  type Subject,
+  humanize,
+} from "./pipeline";
+type ScanData = Pick<Subject, "entities" | "findings" | "decisions">;
 export function scanPrefix(scan: RecordRow): string {
-  return [['sub',scan.subject],['ses',scan.session],['task',scan.task],['acq',scan.acquisition],['run',scan.run]]
-    .filter(([,value]) => value).map(([key,value]) => `${key}-${value}`).join('_');
+  return [
+    ["sub", scan.subject],
+    ["ses", scan.session],
+    ["task", scan.task],
+    ["acq", scan.acquisition],
+    ["run", scan.run],
+  ]
+    .filter(([, value]) => value)
+    .map(([key, value]) => `${key}-${value}`)
+    .join("_");
 }
-
-export function renderScans(data: ScanData, select: (scan: RecordRow) => void): HTMLElement {
-  const panel = element('div');
-  const scans = data.entities.filter(e => e.namespace === 'raw' && ['bold','T1w','T2w'].includes(String(e.suffix)) && !e.echo)
-    .sort((a,b) => scanPrefix(a).localeCompare(scanPrefix(b), undefined, {numeric:true}));
-  const label = element('label','Filter scans');
-  const filter = element('input');
-  filter.placeholder = 'Session, task, or review flag';
-  label.append(filter);
-  const count = element('p',`${scans.length} scans`, 'muted');
-  const scroll = element('div','','scan-table');
-  const table = element('table');
-  const head = element('thead');
-  const heading = element('tr');
-  for (const text of ['Session','Scan','Run','TRs','Mean FD (mm)','Preprocessing','Task models','Flags']) heading.append(element('th',text));
+export function renderScans(
+  data: ScanData,
+  select: (scan: RecordRow) => void,
+): HTMLElement {
+  const panel = element("div", "", "scan-browser");
+  const scans = rawScans(data).sort((a, b) =>
+    scanPrefix(a).localeCompare(scanPrefix(b), undefined, { numeric: true }),
+  );
+  const toolbar = element("div", "", "scan-toolbar");
+  const filter = element("input");
+  filter.placeholder = "Find session or task";
+  filter.setAttribute("aria-label", "Find scans");
+  const queue = element("select");
+  queue.setAttribute("aria-label", "Scan review filter");
+  for (const [value, label] of [
+    ["all", "All scans"],
+    ["pending", "Needs review"],
+    ["flagged", "Flagged (including reviewed)"],
+    ["dropped", "Excluded from preprocessing"],
+    ["analysisExcluded", "Excluded from task models"],
+  ]) {
+    const option = element("option", label);
+    option.value = value;
+    queue.append(option);
+  }
+  toolbar.append(filter, queue);
+  const count = element("p", `${scans.length} scans`, "muted");
+  const scroll = element("div", "", "scan-table");
+  const table = element("table");
+  const head = element("thead");
+  const heading = element("tr");
+  for (const text of ["Scan", "TRs", "FD (mm)", "Disposition"])
+    heading.append(element("th", text));
   head.append(heading);
-  const body = element('tbody');
-  table.append(head,body); scroll.append(table); panel.append(label,count,scroll);
-  const entries = scans.map(scan => {
-    const evidence = data.findings.find(f => f.entity_key === scan.entity_key && f.finding_type === 'scan-review');
-    const metrics = evidence ? JSON.parse(String(evidence.evidence_json)) : {};
-    const decisions = data.decisions.filter(d => d.entity_key === scan.entity_key);
-    const preprocessing = decisions.find(d => d.scope === 'preprocessing')?.decision ?? 'unrecorded';
-    const excluded = decisions.some(d => d.scope === 'task_first_level' && d.decision === 'exclude');
-    const row = element('tr');
-    row.append(element('td',String(scan.session ?? '—')));
-    const name = element('td');
-    const button = element('button',String(scan.task ?? scan.suffix));
-    button.onclick = () => select(scan);
-    name.append(button); row.append(name);
-    const fd = metrics.fd_mean && Number.isFinite(Number(metrics.fd_mean)) ? Number(metrics.fd_mean).toFixed(3) : '—';
-    for (const text of [scan.run ?? '—',metrics.tr_count ?? '—',fd,preprocessing,
-        excluded ? 'exclude' : 'No exclusion recorded',metrics.flags || '—']) row.append(element('td',String(text)));
+  const body = element("tbody");
+  table.append(head, body);
+  scroll.append(table);
+  panel.append(toolbar, count, scroll);
+  const entries = scans.map((scan) => {
+    const m = reviewMetrics(data, scan),
+      outcome = scanOutcome(data, scan);
+    const d = data.decisions.find(
+      (d) => d.entity_key === scan.entity_key && d.scope === "preprocessing",
+    );
+    const row = element("tr");
+    const name = element("td");
+    const button = element(
+      "button",
+      String(scan.task ?? scan.suffix),
+      "scan-name",
+    );
+    button.onclick = () => {
+      body
+        .querySelectorAll("tr")
+        .forEach((r) => r.classList.remove("selected"));
+      row.classList.add("selected");
+      select(scan);
+    };
+    name.append(
+      element("small", `ses-${scan.session ?? "?"} / run-${scan.run ?? "—"}`),
+      button,
+    );
+    const fd =
+      m.fd_mean !== undefined &&
+      m.fd_mean !== "" &&
+      Number.isFinite(Number(m.fd_mean))
+        ? Number(m.fd_mean).toFixed(3)
+        : "—";
+    const disposition = element("td");
+    disposition.append(element("span", String(d?.decision ?? "Unrecorded")));
+    if (outcome.flagged)
+      disposition.append(
+        element(
+          "small",
+          outcome.pending
+            ? "Review required"
+            : m.approved === "yes"
+              ? "Flag reviewed"
+              : "Flag recorded",
+          "flag-text",
+        ),
+      );
+    if (outcome.analysisExcluded)
+      disposition.append(element("small", "Task models: exclude", "excluded"));
+    disposition.title = humanize(m.flags ?? "");
+    row.append(
+      name,
+      element("td", String(m.tr_count ?? "—")),
+      element("td", fd),
+      disposition,
+    );
     body.append(row);
-    return {row, text: `${scanPrefix(scan)} ${metrics.flags ?? ''}`.toLowerCase()};
+    return {
+      row,
+      outcome,
+      text: `${scanPrefix(scan)} ${m.flags ?? ""}`.toLowerCase(),
+    };
   });
-  filter.oninput = () => {
-    for (const entry of entries) entry.row.hidden = !entry.text.includes(filter.value.toLowerCase());
-    count.textContent = `${entries.filter(e => !e.row.hidden).length} of ${scans.length} scans`;
+  const refresh = () => {
+    for (const e of entries)
+      e.row.hidden =
+        !e.text.includes(filter.value.toLowerCase()) ||
+        (queue.value !== "all" &&
+          !e.outcome[queue.value as keyof typeof e.outcome]);
+    count.textContent = `${entries.filter((e) => !e.row.hidden).length} of ${scans.length} scans`;
   };
+  filter.oninput = refresh;
+  queue.onchange = refresh;
   return panel;
 }

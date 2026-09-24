@@ -3,6 +3,7 @@ from datetime import datetime, timezone
 import json
 from pathlib import Path
 import re
+from typing import Literal
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import FileResponse, JSONResponse, HTMLResponse
@@ -10,7 +11,7 @@ from fastapi.staticfiles import StaticFiles
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from network_dashboard.artifacts import content_path
-from network_dashboard.records import connect, rows
+from network_dashboard.records import connect, rows, dataset_roots
 
 
 def create_app(index: Path, study: Path, web: Path | None = None) -> FastAPI:
@@ -61,9 +62,47 @@ def create_app(index: Path, study: Path, web: Path | None = None) -> FastAPI:
                     "findings": rows(db, "SELECT f.* FROM findings f JOIN entities e ON e.entity_key=f.entity_key WHERE e.subject=?", (subject,))}
 
     @app.get("/api/artifacts")
-    def artifacts(q: str = "", limit: int = Query(200, ge=1, le=1000)):
+    def artifacts(q: str = "", limit: int = Query(200, ge=1, le=1000), preview: bool = False,
+                  subject: str | None = None,
+                  dataset_stage: Literal['freesurfer', 'fmriprep'] | None = None,
+                  include_subject_report: bool = False):
         with connect(index) as db:
-            return rows(db, "SELECT * FROM artifact_versions WHERE instr(path,?)>0 ORDER BY path LIMIT ?", (q, limit))
+            if subject is not None and not re.fullmatch(r'[A-Za-z0-9]+', subject):
+                raise HTTPException(400, 'Invalid subject')
+            if include_subject_report and subject:
+                report = f'sub-{subject}.html'
+                found = rows(db, "SELECT * FROM artifact_versions WHERE instr(path,?)>0 OR path=? OR path LIKE ? ORDER BY path",
+                             (q, report, '%/' + report))
+            else:
+                found = rows(db, "SELECT * FROM artifact_versions WHERE instr(path,?)>0 ORDER BY path", (q,))
+            if subject:
+                pattern = re.compile(r'(?:^|[/_])sub-' + re.escape(subject) + r'(?:[/_.]|$)')
+                found = [item for item in found if pattern.search(item['path'])]
+            if dataset_stage:
+                roots = dataset_roots(db, study)
+                def matches_stage(item):
+                    root = roots.get(item['dataset_id'])
+                    if root is None:
+                        return False
+                    # Canonical derivative dataset names distinguish standalone FS8
+                    # from the legacy fMRIPrep anatomical-only campaign.
+                    name = root.name.lower()
+                    if dataset_stage == 'freesurfer':
+                        return name.startswith('freesurfer-8.')
+                    return name.startswith('fmriprep-') and '+anat+' not in name
+                found = [item for item in found if matches_stage(item)]
+            if preview:
+                found = [item for item in found if item['path'].endswith(
+                    ('.html', '.nii', '.nii.gz', '.mgz', '.white', '.pial', '.inflated', '.gii'))]
+            found = found[:limit]
+            if preview:
+                for item in found:
+                    try:
+                        content_path(db, study, item)
+                        item['preview_available'] = True
+                    except HTTPException as error:
+                        item.update(preview_available=False, preview_reason=error.detail)
+            return found
 
     def get_artifact(db, identity):
         found = rows(db, "SELECT * FROM artifact_versions WHERE id=?", (identity,))
