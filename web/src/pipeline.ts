@@ -120,6 +120,7 @@ export function stageStatus(stage: Stage, attempts: RecordRow[]): string {
   if (states.some((s) => ["pending", "pd", "queued"].includes(s)))
     return "Queued";
   if (states.includes("blocked")) return "Blocked";
+  if (states.includes("ready")) return "Ready";
   const successful = (name: string) =>
     rows.some((a) => a.stage === name && a.state === "success");
   const completions: Partial<Record<Stage, string>> = {
@@ -134,6 +135,8 @@ export function stageStatus(stage: Stage, attempts: RecordRow[]): string {
   };
   if (successful(completions[stage] ?? stage))
     return stage === "review" || stage === "surfaces" ? "Approved" : "Complete";
+  if (states.includes("complete") && states.every((s) => ["complete", "success"].includes(s)))
+    return stage === "surfaces" ? "Reconstructed" : "Complete";
   if (states.length && states.every((s) => s === "success")) return "Recorded";
   return "Unrecorded";
 }

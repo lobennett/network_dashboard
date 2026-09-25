@@ -12,6 +12,11 @@ it("never infers a FreeSurfer 8 completion or a zero-drop count from legacy work
   expect(stageStatus("surfaces", rows)).toBe("Unrecorded");
   expect(stageStatus("source", rows)).toBe("Unrecorded");
 });
+it("shows recorded campaign readiness and reconstruction without implying approval", () => {
+  expect(stageStatus("mriqc", [{stage:"mriqc",state:"ready"}])).toBe("Ready");
+  expect(stageStatus("surfaces", [{stage:"freesurfer",state:"blocked"}])).toBe("Blocked");
+  expect(stageStatus("surfaces", [{stage:"freesurfer",state:"complete"}])).toBe("Reconstructed");
+});
 it("uses the newest attempt, and preserves failed session jobs despite an older milestone", () => {
   expect(
     stageStatus("mriqc", [
