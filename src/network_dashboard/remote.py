@@ -81,7 +81,7 @@ class RemoteStudy:
                         raise HTTPException(409, 'Oak content differs from this indexed version; refresh the index')
                 os.replace(temporary, target)
             except (OSError, subprocess.SubprocessError) as error:
-                raise HTTPException(503, 'SSH download failed. Restart connect to authenticate, or ask the owner to restore the Oak file.') from error
+                raise download_error(error, self.host, source) from error
             finally:
                 temporary.unlink(missing_ok=True)
 
@@ -154,3 +154,28 @@ class RemoteStudy:
                         return target
             self._download(self.source / target.relative_to(self.study), target, row['content_id'])
             return target
+
+
+def download_error(error: Exception, host: str, source: Path) -> HTTPException:
+    """Keep transport failures distinct from remote permissions and local I/O."""
+    location = f'{host}:{source}'
+    if isinstance(error, subprocess.CalledProcessError):
+        stderr = error.stderr or ''
+        if isinstance(stderr, bytes):
+            stderr = stderr.decode('utf-8', errors='replace')
+        detail = ''.join(c for c in stderr if c.isprintable() or c in '\n\t').strip()[-2000:]
+        detail = detail or f'SSH command exited with status {error.returncode}'
+        if error.returncode != 255 and 'permission denied' in detail.lower():
+            return HTTPException(403, f'Oak read access denied for {location}. '
+                                 f'Ask the dataset owner to check file and parent-directory permissions.\n{detail}')
+        if error.returncode != 255 and 'no such file or directory' in detail.lower():
+            return HTTPException(404, f'Oak file is missing or its symlink target is unavailable: {location}. '
+                                 f'Ask the owner to restore the indexed file.\n{detail}')
+        hint = ('Restart connect to authenticate.' if 'permission denied' in detail.lower()
+                else 'Check the SSH connection to Sherlock.')
+        return HTTPException(503, f'Could not download {location}. {hint}\n{detail}')
+    if isinstance(error, subprocess.TimeoutExpired):
+        return HTTPException(503, f'Download timed out for {location}. Check the SSH connection and retry.')
+    if isinstance(error, OSError):
+        return HTTPException(503, f'Could not download {location}: local SSH/cache operation failed: {error}')
+    return HTTPException(503, f'Could not download {location}: {error}')

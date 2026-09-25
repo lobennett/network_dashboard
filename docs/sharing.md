@@ -28,12 +28,25 @@ network-fmri records build workflow.toml --output /path/to/records.sqlite
 The Oak sibling must contain the registered file versions referenced by that
 index. The index is a snapshot, not a live scheduler feed.
 
+The index builder creates an owner-only file. When publishing, explicitly grant
+read access to the authorized Oak group; copying that file can preserve its
+private permissions. For this study, collaborators belong to `oak_russpold`:
+
+```bash
+SHARED_INDEX=/oak/stanford/groups/russpold/data/network_grant/network-dashboard-cache/records.sqlite
+install -m 0640 -g oak_russpold /path/to/records.sqlite "$SHARED_INDEX.pending"
+mv "$SHARED_INDEX.pending" "$SHARED_INDEX"
+```
+
+Parent directories also need group traversal access. Check the study files and
+git-annex content for group read access too. Do not make the data world-readable.
+
 ## Deploy
 
 ```bash
 uv build --wheel
 mkdir -p web/public/downloads
-cp dist/network_dashboard-0.4.2-py3-none-any.whl web/public/downloads/
+cp dist/network_dashboard-0.4.3-py3-none-any.whl web/public/downloads/
 vercel --prod
 ```
 

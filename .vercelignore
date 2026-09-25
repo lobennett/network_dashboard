@@ -13,3 +13,4 @@ web/src/*.test.ts
 !web/public/downloads/
 !web/public/downloads/network_dashboard-0.4.1-py3-none-any.whl
 !web/public/downloads/network_dashboard-0.4.2-py3-none-any.whl
+!web/public/downloads/network_dashboard-0.4.3-py3-none-any.whl

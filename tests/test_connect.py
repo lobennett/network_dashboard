@@ -199,3 +199,40 @@ def test_explicit_cache_cannot_be_reassigned(tmp_path):
     with pytest.raises(ValueError, match='different'):
         RemoteStudy('new@host', Path('/study'), Path('/index'), tmp_path)
     assert json.loads((tmp_path/'source.json').read_text())['ssh'] == 'old@host'
+
+
+@pytest.mark.parametrize('code,stderr,status,hint', [
+    (1, b'cat: /oak/shared/records.sqlite: Permission denied\n', 403, 'Oak read access'),
+    (1, b'cat: /oak/shared/records.sqlite: No such file or directory\n', 404, 'missing'),
+    (255, b'user@host: Permission denied (publickey,password).\n', 503, 'authenticate'),
+    (255, b'Connection timed out\n', 503, 'SSH connection'),
+])
+def test_download_reports_real_cause_and_preserves_cache(tmp_path, code, stderr, status, hint):
+    import subprocess
+    from network_dashboard.remote import RemoteStudy
+    def fail(command, **kwargs):
+        kwargs['stdout'].write(b'partial transfer')
+        raise subprocess.CalledProcessError(code, command, stderr=stderr)
+    remote = RemoteStudy('user@host', Path('/study'), Path('/oak/shared/records.sqlite'), tmp_path, runner=fail)
+    target = tmp_path / 'records.sqlite'
+    target.write_bytes(b'previous valid index')
+    with pytest.raises(HTTPException) as raised:
+        remote._download(remote.remote_index, target)
+    assert raised.value.status_code == status
+    assert str(remote.remote_index) in raised.value.detail
+    assert stderr.decode().strip() in raised.value.detail
+    assert hint in raised.value.detail
+    assert target.read_bytes() == b'previous valid index'
+    assert not list(tmp_path.glob('.download-*'))
+
+
+def test_local_write_failure_does_not_recommend_ssh_authentication(tmp_path):
+    from network_dashboard.remote import RemoteStudy
+    def fail(command, **kwargs):
+        raise OSError('No space left on device')
+    remote = RemoteStudy('user@host', Path('/study'), Path('/index'), tmp_path, runner=fail)
+    with pytest.raises(HTTPException) as raised:
+        remote._download(Path('/index'), tmp_path / 'index')
+    assert 'No space left on device' in raised.value.detail
+    assert 'local' in raised.value.detail
+    assert 'authenticate' not in raised.value.detail
