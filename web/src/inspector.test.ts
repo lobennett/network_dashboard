@@ -92,3 +92,14 @@ it("shows subject-level surface decisions and queries the standalone reconstruct
     expect.stringContaining("subject=s03&dataset_stage=freesurfer"),
   );
 });
+
+it('offers fetching registered Oak images without treating blocked anatomy as fetchable', async () => {
+  vi.mocked(get).mockResolvedValue([
+    {id: 'remote', path: 'scan_bold.nii.gz', preview_available: false, fetch_available: true},
+    {id: 'blocked', path: 'scan_T1w.nii.gz', preview_available: false, fetch_available: false},
+  ]);
+  const panel = document.querySelector('article')!;
+  await new ScanInspector(panel).show(data, scan, 'mriqc');
+  await vi.waitFor(() => expect(panel.querySelectorAll('.primary')).toHaveLength(1));
+  expect(panel.querySelector('.primary')?.getAttribute('title')).toContain('downloads from Oak');
+});

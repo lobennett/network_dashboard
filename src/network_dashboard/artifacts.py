@@ -1,6 +1,7 @@
 """Serve registered file versions, enforcing content and anatomical privacy."""
 import hashlib
 import json
+import re
 from pathlib import Path
 import subprocess
 
@@ -23,7 +24,9 @@ def content_path(db, study: Path, artifact: dict) -> Path:
         raise HTTPException(403, "Content is not in a registered local dataset")
     root = root.resolve()
     image = name.endswith((".nii", ".nii.gz", ".mgz", ".white", ".pial", ".inflated", ".gii"))
-    if image and not name.endswith(("_bold.nii", "_bold.nii.gz")):
+    fieldmap = relative.parent.name == 'fmap' and bool(re.fullmatch(
+        r'sub-[A-Za-z0-9]+(?:_[A-Za-z0-9]+-[A-Za-z0-9]+)*_(?:fieldmap|magnitude)\.nii(?:\.gz)?', name))
+    if image and not fieldmap and not name.endswith(("_bold.nii", "_bold.nii.gz")):
         if not _has_defacing_evidence(db, artifact, roots):
             raise HTTPException(403, "Image preview requires recorded defacing evidence")
     target = (root / relative).resolve()

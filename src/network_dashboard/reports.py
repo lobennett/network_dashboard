@@ -15,7 +15,7 @@ from network_dashboard.artifacts import content_path
 from network_dashboard.records import dataset_roots
 
 
-def inline_figures(db, study, artifact, path):
+def inline_figures(db, study, artifact, path, *, fetcher=None, archive_fetcher=None):
     original = path.read_text()
     stack = ExitStack()
     archived = None
@@ -35,7 +35,7 @@ def inline_figures(db, study, artifact, path):
                                 (artifact['dataset_id'], relative)).fetchall()
         if not candidates:
             if archived is None:
-                archived = _report_archive(db, study, artifact, original, stack)
+                archived = _report_archive(db, study, artifact, original, stack, fetcher=fetcher, archive_fetcher=archive_fetcher)
             archive, prefix = archived
             member = prefix + relative
             if archive.namelist().count(member) != 1:
@@ -45,7 +45,7 @@ def inline_figures(db, study, artifact, path):
         error = None
         for candidate in candidates:
             try:
-                figure = content_path(db, study, dict(candidate))
+                figure = fetcher(candidate['id']) if fetcher else content_path(db, study, dict(candidate))
                 encoded = base64.b64encode(figure.read_bytes()).decode('ascii')
                 return f'<img alt="MRIQC figure" style="max-width:100%;height:auto" src="data:image/svg+xml;base64,{encoded}">'
             except HTTPException as failure:
@@ -60,22 +60,39 @@ def inline_figures(db, study, artifact, path):
         return re.sub(r'(<body\b[^>]*>)', lambda match: match.group(0) + note, rendered, count=1, flags=re.I)
 
 
-def _report_archive(db, study, artifact, original, stack):
+def _report_archive(db, study, artifact, original, stack, *, fetcher=None, archive_fetcher=None):
     row = db.execute('SELECT * FROM artifact_versions WHERE dataset_id=? AND path=?',
                      (artifact['dataset_id'], 'code/network_fmri/mriqc-evidence.json')).fetchone()
     if row is None:
         raise HTTPException(404, 'Report figure is not indexed')
-    receipt = json.loads(content_path(db, study, dict(row)).read_text())
+    receipt_path = fetcher(row['id']) if fetcher else content_path(db, study, dict(row))
+    receipt = json.loads(receipt_path.read_text())
     root = dataset_roots(db, study).get(receipt['source_dataset_id'])
     if root is None:
         raise HTTPException(404, 'Report archive dataset is unavailable')
-    for item in receipt['archives']:
+    failure = None
+    subject = re.search(r'(?:^|[/_])(sub-[A-Za-z0-9]+)(?:[/_.]|$)', artifact['path'])
+    candidates = receipt['archives']
+    if subject:
+        candidates = [item for item in candidates if PurePosixPath(item['path']).name.startswith(subject[1] + '_')]
+    for item in candidates:
         relative = PurePosixPath(item['path'])
         if relative.is_absolute() or '..' in relative.parts or '\\' in str(relative):
             raise HTTPException(403, 'Unsafe report archive path')
         source = (root / relative).resolve()
         if not source.is_relative_to(root.resolve()):
             raise HTTPException(403, 'Report archive leaves its local dataset')
+        if archive_fetcher:
+            registered = db.execute('SELECT id FROM artifact_versions WHERE dataset_id=? AND path=? AND content_id=?',
+                                    (receipt['source_dataset_id'], str(relative), 'sha256:' + item['sha256'])).fetchone()
+            if registered:
+                try:
+                    source = archive_fetcher(registered['id'])
+                except HTTPException as error:
+                    if error.status_code == 403:
+                        raise
+                    failure = error
+                    continue
         if not source.is_file():
             continue
         with source.open('rb') as stream:
@@ -87,4 +104,6 @@ def _report_archive(db, study, artifact, original, stack):
         matches = [name for name in archive.namelist() if name.endswith(suffix)]
         if len(matches) == 1 and archive.read(matches[0]).decode() == original:
             return archive, matches[0][:-len(artifact['path'])]
+    if failure:
+        raise failure
     raise HTTPException(404, 'Verified archive for this report is unavailable')

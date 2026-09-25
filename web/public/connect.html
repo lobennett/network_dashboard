@@ -140,268 +140,49 @@
     <header>Network · Pipeline review</header>
     <main>
       <a href="/">← Dashboard</a>
-      <h1>Set up your computer</h1>
-      <p>
-        Connect the dashboard to your own copy of the study on Oak. Complete the
-        setup once, then start the local service whenever you want to review
-        data.
-      </p>
-      <p>
-        <strong>Before you begin:</strong> you need a Sherlock account with
-        Stanford authentication and read access to the lab’s
-        <code>russpold</code> Oak partition. Ask the study owner to arrange
-        access if you do not have it.
-      </p>
-      <p>
-        Run the commands below in
-        <strong>Terminal on your own computer</strong>, using bash or zsh. Copy
-        buttons copy commands only; they do not run them.
-      </p>
+      <h1>Connect to the study</h1>
+      <p>You need <a href="https://docs.astral.sh/uv/getting-started/installation/">uv</a>,
+        SSH, and a Sherlock account with read access to the lab’s russpold Oak data.
+        Use a current Chrome browser. No local DataLad, Git, or git-annex installation is needed.</p>
       <div id="copy-status" role="status" aria-live="polite"></div>
-
-      <h2>1. Install the prerequisites</h2>
-      <div class="table-scroll">
-        <table>
-          <thead>
-            <tr>
-              <th scope="col">You need</th>
-              <th scope="col">What it does</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td>Git + git-annex</td>
-              <td>Track dataset versions and retrieve large study files.</td>
-            </tr>
-            <tr>
-              <td>SSH + SCP</td>
-              <td>
-                Authenticate to Sherlock and transfer files. Included with
-                macOS; install OpenSSH on Linux.
-              </td>
-            </tr>
-            <tr>
-              <td>uv + Python 3.12+</td>
-              <td>
-                Install and run the local service. uv can install Python for
-                you.
-              </td>
-            </tr>
-            <tr>
-              <td>DataLad</td>
-              <td>
-                Install study subdatasets and fetch their files. Install
-                separately from git-annex.
-              </td>
-            </tr>
-            <tr>
-              <td>Current Chrome</td>
-              <td>
-                Open the dashboard and grant local-network/loopback access.
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-      <p class="note">
-        Processing runs on Sherlock. Allow space for the images you fetch; the
-        example below downloads one BOLD file of about 133 MB.
-      </p>
-
-      <h3>Choose your operating system</h3>
-      <details open>
-        <summary>macOS</summary>
-        <p>
-          Install <a href="https://brew.sh/">Homebrew</a> if needed, follow its
-          PATH instructions, then run:
-        </p>
-        <pre
-          data-label="macOS dependencies"
-        ><code>brew install git git-annex uv</code></pre>
-      </details>
+      <h2>1. Run this on your computer</h2>
+      <p>Replace <code>YOUR_SUNET_ID</code> with your username. Run in Terminal
+        (macOS or Linux; Windows users can use WSL2).</p>
+      <pre data-label="Connect to Sherlock"><code id="launch">uvx --python 3.12 --from DASHBOARD_ORIGIN/downloads/network_dashboard-0.2.0-py3-none-any.whl network-dashboard connect --ssh YOUR_SUNET_ID@login.sherlock.stanford.edu</code></pre>
+      <p>Complete Stanford authentication when prompted. The command installs the small
+        service, refreshes the study index, and starts a local connection. Leave the terminal running.</p>
+      <h2>2. Open the dashboard</h2>
+      <p>Go to <a href="/">the dashboard</a>, select <strong>Connect to local study</strong>,
+        and allow local-network access if Chrome asks. Choose a subject, stage, and scan,
+        then <strong>View in NiiVue</strong> or <strong>Open MRIQC report</strong>.</p>
+      <p>Files download from Oak when opened and remain cached for future visits.
+        FreeSurfer review offers norm/ribbon overlays and individual white/pial surfaces
+        when the reconstruction and its provenance are available. Fieldmaps and magnitude
+        images appear alongside the session’s other scans.</p>
       <details>
-        <summary>Ubuntu / Debian Linux</summary>
-        <pre data-label="Linux dependencies"><code>sudo apt update
-sudo apt install git git-annex openssh-client curl
-curl -LsSf https://astral.sh/uv/install.sh | sh
-export PATH="$HOME/.local/bin:$PATH"</code></pre>
-      </details>
-      <p class="note">
-        Windows: use Ubuntu in
-        <a href="https://learn.microsoft.com/en-us/windows/wsl/install">WSL2</a>
-        and run the Linux commands there. This setup has been tested on macOS;
-        WSL2 browser connectivity has not yet been verified.
-      </p>
-
-      <h3>Install Python and DataLad</h3>
-      <pre data-label="Python and DataLad"><code>uv python install 3.12
-uv tool install --python 3.12 datalad
-uv tool update-shell
-export PATH="$HOME/.local/bin:$PATH"</code></pre>
-      <p>
-        Check that these commands print version numbers or a Python path before
-        continuing:
-      </p>
-      <pre data-label="Check prerequisites"><code>git --version
-git annex version
-ssh -V
-uv --version
-uv python find 3.12
-datalad --version</code></pre>
-      <p class="note">
-        Installation references:
-        <a href="https://docs.astral.sh/uv/getting-started/installation/">uv</a>
-        ·
-        <a href="https://handbook.datalad.org/en/latest/intro/installation.html"
-          >DataLad</a
-        >
-        ·
-        <a href="https://formulae.brew.sh/formula/git-annex"
-          >git-annex on macOS</a
-        >.
-      </p>
-
-      <h2>2. Install the dashboard service</h2>
-      <p>
-        This installs the small Python service that reads your local study
-        files. The website already provides the interface.
-      </p>
-      <pre
-        data-label="Dashboard installation"
-      ><code id="install">uv tool install --python 3.12 DASHBOARD_ORIGIN/downloads/network_dashboard-0.1.0-py3-none-any.whl
-network-dashboard --help</code></pre>
-
-      <h2>3. Connect to Sherlock</h2>
-      <p>Open your SSH configuration in a terminal editor:</p>
-      <pre data-label="Open SSH configuration"><code>mkdir -p ~/.ssh
-chmod 700 ~/.ssh
-nano ~/.ssh/config</code></pre>
-      <p>
-        Paste this block <strong>into that file</strong>, replacing
-        <code>YOUR_SUNET_ID</code> with your own username. If a
-        <code>Host sherlock</code> entry already exists, update it instead of
-        adding a duplicate. In nano, save with Ctrl+O, Enter, then exit with
-        Ctrl+X.
-      </p>
-      <pre
-        data-label="SSH configuration — paste into the file"
-      ><code>Host sherlock
-  HostName login.sherlock.stanford.edu
-  User YOUR_SUNET_ID
-  ControlMaster auto
-  ControlPath ~/.ssh/sherlock-%C
-  ControlPersist 10m</code></pre>
-      <p>
-        Run this check and complete Stanford authentication. It runs one check
-        on Sherlock and returns you to your local terminal. Expect
-        <strong>Oak access confirmed</strong>:
-      </p>
-      <pre
-        data-label="Check Sherlock and Oak access"
-      ><code>ssh sherlock 'test -r /oak/stanford/groups/russpold/data/network_grant/network-dashboard-cache/records.sqlite &amp;&amp; echo "Oak access confirmed"'</code></pre>
-
-      <h2>4. Get the pilot study</h2>
-      <p>
-        These commands create <code>~/network-review</code>, clone the study
-        metadata, and copy the dashboard index. Run the clone once; if you
-        already have this clone, use the next block.
-      </p>
-      <pre data-label="Clone the study"><code>mkdir -p ~/network-review
-cd ~/network-review
-export DATALAD_SSH_MULTIPLEX__CONNECTIONS=false
-git clone ssh://sherlock/oak/stanford/groups/russpold/data/network_grant/network-study-pilot-s03 study
-scp sherlock:/oak/stanford/groups/russpold/data/network_grant/network-dashboard-cache/records.sqlite records.sqlite</code></pre>
-      <p>
-        Install the raw-data subdataset and fetch one image to try in NiiVue:
-      </p>
-      <pre data-label="Fetch a sample image"><code>cd ~/network-review/study
-export DATALAD_SSH_MULTIPLEX__CONNECTIONS=false
-datalad get -n sourcedata/raw
-cd sourcedata/raw
-git config remote.origin.annex-shell /scratch/users/logben/mechababs-work/campaign-base/bin/git-annex-shell
-git config remote.origin.annex-ignore false
-datalad get sub-s03/ses-07/func/sub-s03_ses-07_task-goNogo_run-1_echo-2_bold.nii.gz</code></pre>
-      <p class="note">
-        The explicit annex-shell path uses the modern git-annex installed on
-        Sherlock. It must be accessible to your account. Only requested files
-        are downloaded; MRIQC reports and other images need separate retrieval.
-      </p>
-
-      <h2>5. Start reviewing</h2>
-      <pre
-        data-label="Start the local service"
-      ><code id="launch">cd ~/network-review
-export DATALAD_SSH_MULTIPLEX__CONNECTIONS=false
-network-dashboard --study study --index records.sqlite \
-  --allow-origin DASHBOARD_ORIGIN</code></pre>
-      <p>
-        Leave this terminal running. Open <a href="/">the dashboard</a>, click
-        <strong>Connect to local study</strong>, and allow
-        local-network/loopback access when Chrome asks. Select sub-s03 → MRIQC →
-        ses-07 / goNogo → <strong>View echo-2 in NiiVue</strong>.
-      </p>
-      <p>
-        Next time, repeat this step only. Press Ctrl+C in the terminal to stop
-        the service. Reauthenticate to Sherlock before fetching more files if
-        your SSH session has expired.
-      </p>
-
-      <details>
-        <summary>Fetching more files and refreshing the snapshot</summary>
-        <p>
-          In a second local terminal, install the relevant subdataset with
-          <code>datalad get -n</code> and configure its remote annex-shell as in
-          step 4. Then retrieve files with DataLad or fetch one indexed artifact
-          by its ID from Files &amp; provenance:
-        </p>
-        <pre data-label="Fetch an indexed artifact"><code>cd ~/network-review
-export DATALAD_SSH_MULTIPLEX__CONNECTIONS=false
-network-dashboard --study study --index records.sqlite --get-artifact ARTIFACT_ID</code></pre>
-        <p>
-          Replace <code>ARTIFACT_ID</code> before running. Anatomical previews
-          require recorded defacing evidence. The website does not automatically
-          download missing files.
-        </p>
-        <p>
-          The header shows the index timestamp. To refresh, update the study and
-          relevant subdatasets from Oak, copy a newly rebuilt index using the
-          SCP command in step 4, then reload the dashboard.
-        </p>
+        <summary>Next time, updates, and disk space</summary>
+        <p>Run the same command next time. Restart it to refresh the index or renew SSH
+          authentication. Press Ctrl+C to stop. Images are cached under
+          <code>~/.cache/network-dashboard</code>; add <code>--cache /path/to/cache</code>
+          to choose a different location. You can delete this cache after stopping the service.</p>
+        <p>MRIQC report figures may require downloading their result archive on first use.
+          The site displays the index timestamp; it is a snapshot of recorded processing.</p>
       </details>
       <details>
         <summary>Troubleshooting</summary>
         <ul>
-          <li>
-            <strong>Command not found:</strong> reopen Terminal after
-            installation, then rerun the prerequisite checks. For uv tools, run
-            <code>uv tool update-shell</code>.
-          </li>
-          <li>
-            <strong>Permission denied / no Oak confirmation:</strong> check your
-            SSH username, complete Stanford authentication, and confirm russpold
-            Oak access with the study owner.
-          </li>
-          <li>
-            <strong>Cannot load the study:</strong> keep the service running,
-            use the same dashboard address as the launch command, and allow
-            local-network/loopback access in Chrome’s site settings.
-          </li>
-          <li>
-            <strong>Image unavailable:</strong> fetch that file and install its
-            subdataset first. The example only retrieves one echo-2 image.
-          </li>
-          <li>
-            <strong>Address already in use:</strong> a service may already be
-            running on port 18782. Use that terminal or stop it with Ctrl+C
-            before starting another.
-          </li>
+          <li><strong>Permission denied:</strong> check your username, complete Stanford authentication,
+            and confirm russpold Oak access.</li>
+          <li><strong>Connection refused:</strong> keep the terminal running and permit Chrome’s
+            local-network access. The default local port is 18782.</li>
+          <li><strong>Content differs:</strong> restart the command to refresh the index. If this
+            persists, the owner needs to rebuild the shared index.</li>
+          <li><strong>Preview blocked:</strong> anatomical images and surfaces require verified
+            defacing provenance; missing evidence must be fixed upstream.</li>
         </ul>
       </details>
-      <p class="note">
-        Study data travels directly from your local service to your browser.
-        Vercel hosts only the interface; your SSH credentials stay on your
-        computer.
-      </p>
+      <p class="note">Vercel hosts the interface only. Study data travels from Oak over your SSH
+        connection to your computer. Your credentials stay on your computer.</p>
     </main>
     <script>
       const dashboardOrigin =
@@ -410,7 +191,7 @@ network-dashboard --study study --index records.sqlite --get-artifact ARTIFACT_I
           : "https://network-dashboard-devloganbennetts-projects.vercel.app";
       for (const link of document.querySelectorAll('a[href="/"]'))
         link.href = dashboardOrigin;
-      for (const id of ["install", "launch"]) {
+      for (const id of ["launch"]) {
         const code = document.getElementById(id);
         code.textContent = code.textContent.replaceAll(
           "DASHBOARD_ORIGIN",

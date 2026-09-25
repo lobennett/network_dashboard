@@ -173,7 +173,7 @@ export function rawScans(data: Pick<Subject, "entities">) {
   return data.entities.filter(
     (e) =>
       e.namespace === "raw" &&
-      ["bold", "T1w", "T2w"].includes(String(e.suffix)) &&
+      ["bold", "T1w", "T2w", "fieldmap", "magnitude"].includes(String(e.suffix)) &&
       !e.echo,
   );
 }

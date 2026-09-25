@@ -72,6 +72,19 @@ def test_subject_query_cannot_inject_sql(study):
     assert client(study).get("/api/subjects/s03%27%20OR%201=1--").status_code == 404
 
 
+@pytest.mark.parametrize('suffix', ['fieldmap', 'magnitude'])
+def test_fieldmap_pair_is_viewable_without_anatomical_defacing(study, suffix):
+    root, index = study
+    path = root / f'sub-s03/ses-01/fmap/sub-s03_ses-01_run-1_{suffix}.nii.gz'
+    path.parent.mkdir(parents=True)
+    path.write_bytes(b'fieldmap')
+    with sqlite3.connect(index) as db:
+        db.execute('INSERT INTO artifact_versions VALUES (?,?,?,?,?)',
+                   ('fmap', 'study', path.relative_to(root).as_posix(),
+                    'sha256:' + hashlib.sha256(path.read_bytes()).hexdigest(), '{}'))
+    assert client(study).get('/api/artifacts/fmap/content').status_code == 200
+
+
 def test_unregistered_symlink_target_is_forbidden(study, tmp_path):
     report = study[0] / "report.html"
     report.unlink()

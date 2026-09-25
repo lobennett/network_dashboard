@@ -10,6 +10,7 @@ type Artifact = {
   dataset_id: string;
   content_id: string;
   preview_available?: boolean;
+  fetch_available?: boolean;
   preview_reason?: string;
 };
 type Lineage = {
@@ -169,7 +170,7 @@ export class ScanInspector {
         );
         if (generation !== this.generation || view !== viewGeneration) return;
         files = files.filter(belongsToSelection);
-        const available = files.filter((f) => f.preview_available);
+        const available = files.filter((f) => f.preview_available || f.fetch_available);
         const choices = element("div", "", "preview-choices");
         const display = element("div", "", "preview-display");
         content.replaceChildren(choices, display);
@@ -183,9 +184,20 @@ export class ScanInspector {
             Number(b.path.includes("echo-2")) -
             Number(a.path.includes("echo-2")),
         );
+        if (subjectOutputs) {
+          for (const norm of unique.filter(f => f.path.endsWith('/mri/norm.mgz'))) {
+            const ribbon = unique.find(f => f.dataset_id === norm.dataset_id && f.path === norm.path.replace(/norm\.mgz$/, 'ribbon.mgz'));
+            if (ribbon) {
+              const button = element('button', 'Inspect ribbon over anatomy', 'primary');
+              button.title = norm.path;
+              button.onclick = () => void this.preview(norm, display, generation, [ribbon]);
+              choices.append(button);
+            }
+          }
+        }
         for (const file of unique) {
           const label = isImage(file.path)
-            ? `View ${subjectOutputs ? file.path.split("/").pop() : (file.path.match(/echo-\d+/)?.[0] ?? scan.suffix)} in NiiVue`
+            ? `View ${subjectOutputs ? file.path.split("/").pop() : (file.path.match(/echo-\d+/)?.[0] ?? file.path.match(/_(fieldmap|magnitude)\.nii/)?.[1] ?? scan.suffix)} in NiiVue`
             : /_(bold|T1w|T2w)\.html$/.test(file.path)
               ? "Open MRIQC report"
               : "Open report";
@@ -194,7 +206,7 @@ export class ScanInspector {
             label,
             isImage(file.path) ? "primary" : "",
           );
-          button.title = file.path;
+          button.title = file.path + (file.fetch_available ? ' — downloads from Oak when opened' : '');
           button.onclick = () => {
             if (!isImage(file.path)) {
               void openRecordedFile(file.id, file.path);
@@ -225,7 +237,7 @@ export class ScanInspector {
               "muted",
             ),
           );
-        const unavailable = files.filter((f) => !f.preview_available);
+        const unavailable = files.filter((f) => !f.preview_available && !f.fetch_available);
         if (unavailable.length) {
           const block = element("details", "", "unavailable");
           block.append(
@@ -303,6 +315,7 @@ export class ScanInspector {
     file: Artifact,
     display: HTMLElement,
     generation: number,
+    overlays: Artifact[] = [],
   ) {
     const load = ++this.load;
     this.viewer?.cleanup();
@@ -314,7 +327,7 @@ export class ScanInspector {
     const status = element("p", "Loading NiiVue…", "muted");
     display.replaceChildren(status, frame);
     try {
-      const viewer = await viewFile(canvas, file.id, file.path);
+      const viewer = await viewFile(canvas, file.id, file.path, overlays);
       if (
         generation !== this.generation ||
         load !== this.load ||

@@ -16,7 +16,7 @@ from network_dashboard.artifacts import content_path
 from network_dashboard.records import connect, rows, dataset_roots
 
 
-def create_app(index: Path, study: Path, web: Path | None = None, *, allowed_origins: list[str] | None = None) -> FastAPI:
+def create_app(index: Path, study: Path, web: Path | None = None, *, allowed_origins: list[str] | None = None, fetcher=None, archive_fetcher=None) -> FastAPI:
     index, study = Path(index), Path(study).resolve()
     allowed_origins = allowed_origins or []
     for origin in allowed_origins:
@@ -112,7 +112,8 @@ def create_app(index: Path, study: Path, web: Path | None = None, *, allowed_ori
                         content_path(db, study, item)
                         item['preview_available'] = True
                     except HTTPException as error:
-                        item.update(preview_available=False, preview_reason=error.detail)
+                        item.update(preview_available=False, preview_reason=error.detail,
+                                    fetch_available=bool(fetcher and error.status_code in {404, 409}))
             return found
 
     def get_artifact(db, identity):
@@ -149,10 +150,10 @@ def create_app(index: Path, study: Path, web: Path | None = None, *, allowed_ori
         rendered = None
         with connect(index) as db:
             artifact = get_artifact(db, identity)
-            path = content_path(db, study, artifact)
+            path = fetcher(identity) if fetcher else content_path(db, study, artifact)
             if artifact["path"].endswith(".html"):
                 from network_dashboard.reports import inline_figures
-                rendered = inline_figures(db, study, artifact, path)
+                rendered = inline_figures(db, study, artifact, path, fetcher=fetcher, archive_fetcher=archive_fetcher)
         headers = {"X-Content-Type-Options": "nosniff", "Cache-Control": "no-store"}
         if artifact["path"].endswith(".html"):
             headers["Content-Security-Policy"] = "sandbox allow-scripts; default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:"
