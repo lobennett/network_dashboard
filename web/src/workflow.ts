@@ -1,3 +1,4 @@
+import { acquisitionRecords } from "./flywheel";
 import { element, details } from "./review";
 import {
   stages,
@@ -18,7 +19,10 @@ export function workflow(
   stages.forEach((stage, index) => {
     const button = element("button", "", "stage");
     button.setAttribute("aria-pressed", String(stage.id === active));
-    const status = stageStatus(stage.id, data.attempts);
+    const status =
+      stage.id === "source" && acquisitionRecords(data).length
+        ? "Inventory recorded"
+        : stageStatus(stage.id, data.attempts);
     button.append(
       element("span", String(index + 1).padStart(2, "0"), "step-number"),
       element("strong", stage.title),
@@ -36,17 +40,9 @@ export function stageDetail(data: Subject, active: Stage): HTMLElement {
   const heading = element("div", "", "stage-heading");
   heading.append(
     element("h2", stage.title),
-    element("span", stageStatus(active, data.attempts), "badge"),
+    element("span", active === "source" && acquisitionRecords(data).length ? "Inventory recorded" : stageStatus(active, data.attempts), "badge"),
   );
   panel.append(heading, element("p", stage.description));
-  if (active === "source")
-    panel.append(
-      element(
-        "p",
-        "The scan list below contains indexed BIDS scans. Pre-conversion skips and dropped DICOMs are unrecorded in this snapshot; their absence is not evidence that none were excluded.",
-        "gap",
-      ),
-    );
   const rows = data.attempts.filter(
     (a) => stageFor(String(a.stage)) === active,
   );

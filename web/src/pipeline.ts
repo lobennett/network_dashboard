@@ -50,17 +50,17 @@ export const stages = [
   },
   {
     id: "surfaces",
-    title: "FreeSurfer 8",
+    title: "FreeSurfer 8.2.0",
     caption: "Reconstruct & review",
     description:
-      "Run standalone FreeSurfer 8, then inspect and approve the surfaces. Surface approval is required before fMRIPrep uses this reconstruction.",
+      "Planned version: FreeSurfer 8.2.0. Run the reconstruction separately, then inspect and approve the surfaces. Surface approval is required before fMRIPrep uses this reconstruction.",
   },
   {
     id: "fmriprep",
-    title: "fMRIPrep",
+    title: "fMRIPrep 25.2.5",
     caption: "Reuse approved surfaces",
     description:
-      "Preprocess retained scans using the approved FreeSurfer subjects directory, then inspect the final outputs.",
+      "Planned version: fMRIPrep 25.2.5. Preprocess retained scans using the approved FreeSurfer subjects directory, then inspect the final outputs.",
   },
 ] as const;
 export type Stage = (typeof stages)[number]["id"];

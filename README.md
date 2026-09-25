@@ -38,5 +38,8 @@ The snapshot timestamp is shown in the header; reload after refreshing the index
 Select a pipeline stage, then a scan. **View in NiiVue** opens available images;
 **Open MRIQC report** opens its report. Filter scans by review status or analysis
 exclusion. **Files & provenance** contains sidecars and recorded file history.
-This historical pilot lacks conversion receipts, so its DICOM exclusions and
-ancestry remain unrecorded. The standalone FreeSurfer 8 pilot is still pending.
+The Flywheel stage includes a recovered current acquisition inventory; it is
+distinct from historical conversion evidence. New conversions save their selection
+receipts automatically. Planned versions are FreeSurfer 8.2.0 and fMRIPrep 25.2.5.
+
+See [sharing and DataLad access](docs/sharing.md) for Oak retrieval and Vercel setup.

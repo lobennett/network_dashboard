@@ -202,3 +202,16 @@ def test_fmriprep_acquisition_and_subject_report_are_filtered_before_limit(study
             ('subject-report','fprep','sub-s03.html','sha256:missing','{}')])
     result = client(study).get('/api/artifacts?subject=s03&dataset_stage=fmriprep&q=sub-s03_ses-11_task-rest_&include_subject_report=true&limit=2').json()
     assert {r['id'] for r in result} == {'later','subject-report'}
+
+
+def test_only_explicit_shared_frontend_can_read_local_api(study):
+    from network_dashboard.api import create_app
+    shared = TestClient(create_app(study[1], study[0], allowed_origins=['https://network.example.org']))
+    headers={'Origin':'https://network.example.org','Sec-Fetch-Site':'cross-site'}
+    response=shared.get('/api/subjects',headers=headers)
+    assert response.status_code==200
+    assert response.headers['access-control-allow-origin']=='https://network.example.org'
+    assert shared.get('/api/subjects',headers={'Origin':'https://attacker.example'}).status_code==403
+    response=shared.options('/api/subjects',headers={**headers,'Access-Control-Request-Method':'GET','Access-Control-Request-Private-Network':'true'})
+    assert response.status_code==200
+    assert response.headers['access-control-allow-private-network']=='true'

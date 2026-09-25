@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="en">
+  <meta charset="utf-8" /><meta
+    name="viewport"
+    content="width=device-width,initial-scale=1"
+  />
+  <title>Connect · Network</title>
+  <style>
+    body {
+      font:
+        17px/1.6 "Segoe UI",
+        Arial,
+        sans-serif;
+      color: #2e2d29;
+      margin: 0;
+    }
+    header {
+      background: #8c1515;
+      color: white;
+      padding: 18px 28px;
+      font-weight: 700;
+    }
+    main {
+      max-width: 850px;
+      margin: 36px auto;
+      padding: 0 24px;
+    }
+    a {
+      color: #8c1515;
+    }
+    pre {
+      background: #f5f5f4;
+      border-left: 3px solid #8c1515;
+      padding: 16px;
+      overflow: auto;
+      font-size: 13px;
+    }
+    code {
+      overflow-wrap: anywhere;
+    }
+    h1,
+    h2 {
+      line-height: 1.2;
+    }
+    h2 {
+      margin-top: 36px;
+    }
+  </style>
+  <header>Network · Pipeline review</header>
+  <main>
+    <h1>Connect your study</h1>
+    <p>
+      You need a Sherlock account with russpold Oak access, Python 3.12+, uv,
+      DataLad, and git-annex on your computer. The shared website contains only
+      the interface. Study files are retrieved over your own SSH connection and
+      served locally.
+    </p>
+    <h2>1. Install the local service</h2>
+    <p>
+      Download the
+      <a href="/downloads/network_dashboard-0.1.0-py3-none-any.whl"
+        >backend package</a
+      >, then install it:
+    </p>
+    <pre>
+uv tool install ~/Downloads/network_dashboard-0.1.0-py3-none-any.whl</pre
+    >
+    <h2>2. Authenticate and clone the study</h2>
+    <p>
+      Configure a <code>sherlock</code> alias in
+      <code>~/.ssh/config</code> using your own username. Complete Stanford
+      authentication through SSH; never enter credentials into this website.
+    </p>
+    <pre>
+Host sherlock
+  HostName login.sherlock.stanford.edu
+  User YOUR_SUNET_ID
+  ControlMaster auto
+  ControlPath ~/.ssh/sherlock-%C
+  ControlPersist 10m</pre
+    >
+    <pre>
+ssh sherlock
+# After authenticating, exit back to your computer.
+export DATALAD_SSH_MULTIPLEX__CONNECTIONS=false
+git clone ssh://sherlock/oak/stanford/groups/russpold/data/network_grant/network-study-pilot-s03 study
+scp sherlock:/oak/stanford/groups/russpold/data/network_grant/network-dashboard-cache/records.sqlite .
+cd study
+datalad get -n sourcedata/raw
+cd sourcedata/raw
+git config remote.origin.annex-shell /scratch/users/logben/mechababs-work/campaign-base/bin/git-annex-shell
+git config remote.origin.annex-ignore false
+# Fetch the functional scans you want to review (or one filename).
+datalad get sub-s03/ses-07/func
+cd ../../..</pre
+    >
+    <p>
+      This is the current sub-s03 pilot snapshot. Only requested annex content
+      is downloaded. The remote annex-shell path selects the installed modern
+      git-annex; it must remain accessible to your account.
+    </p>
+    <h2>3. Start and connect</h2>
+    <p>
+      From the directory containing <code>study/</code> and
+      <code>records.sqlite</code>:
+    </p>
+    <pre id="launch">
+network-dashboard --study study --index records.sqlite \
+  --allow-origin DASHBOARD_ORIGIN</pre
+    >
+    <p>
+      Leave this terminal running, return to <a href="/">the dashboard</a>, and
+      click <strong>Connect to local study</strong>. Allow local-network access
+      when the browser asks. Current Chrome is recommended. The service listens
+      only on <code>127.0.0.1:18782</code> and permits this exact website
+      origin.
+    </p>
+    <p>
+      Missing files are fetched explicitly with DataLad. To fetch one indexed
+      artifact and verify its checksum, use:
+    </p>
+    <pre>
+network-dashboard --study study --index records.sqlite --get-artifact ARTIFACT_ID</pre
+    >
+    <p>
+      For MRIQC and other derivatives, install the corresponding study
+      subdataset first with <code>datalad get -n derivatives/NAME</code>, then
+      configure its <code>remote.origin.annex-shell</code> and
+      <code>remote.origin.annex-ignore</code> as above. Anatomical previews
+      require recorded defacing evidence.
+    </p>
+    <p>
+      To refresh, update the study and relevant subdatasets from Oak, copy a
+      newly rebuilt index, then reload. The timestamp in the dashboard
+      identifies the snapshot; an open page does not imply live job status.
+    </p>
+  </main>
+  <script>
+    document.getElementById("launch").textContent = document
+      .getElementById("launch")
+      .textContent.replace("DASHBOARD_ORIGIN", location.origin);
+  </script>
+</html>

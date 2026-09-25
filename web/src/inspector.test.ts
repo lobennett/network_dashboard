@@ -3,7 +3,10 @@ import { beforeEach, expect, it, vi } from "vitest";
 import { get } from "./api";
 import { viewFile } from "./viewer";
 import { ScanInspector } from "./inspector";
-vi.mock("./api", () => ({ get: vi.fn() }));
+vi.mock("./api", async (original) => ({
+  ...(await original<typeof import("./api")>()),
+  get: vi.fn(),
+}));
 vi.mock("./viewer", () => ({ viewFile: vi.fn() }));
 const scan = {
   entity_key: "scan",

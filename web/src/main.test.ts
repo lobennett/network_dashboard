@@ -1,15 +1,30 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { get } from "./api";
-vi.mock("./api", () => ({ get: vi.fn() }));
+vi.mock("./api", async (original) => ({
+  ...(await original<typeof import("./api")>()),
+  get: vi.fn(),
+}));
 vi.mock("./viewer", () => ({ viewFile: vi.fn() }));
 beforeEach(() => {
   vi.resetModules();
   document.body.innerHTML = '<div id="app"></div>';
 });
 afterEach(() => {
+  vi.unstubAllEnvs();
   vi.useRealTimers();
   vi.clearAllMocks();
+});
+it("waits for a connection click before accessing the local network", async () => {
+  vi.stubEnv("VITE_API_BASE_URL", "http://127.0.0.1:18782");
+  responses(() => Promise.reject(new Error("unexpected request")));
+  await import("./main");
+  expect(get).not.toHaveBeenCalled();
+  document.querySelector<HTMLButtonElement>(".connection button")!.click();
+  await vi.waitFor(() =>
+    expect(document.querySelector(".scan-name")).not.toBeNull(),
+  );
+  expect(document.querySelector(".connection")).toBeNull();
 });
 function responses(lineage: (path: string) => Promise<unknown>) {
   vi.mocked(get).mockImplementation((path: string) => {

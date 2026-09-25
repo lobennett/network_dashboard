@@ -1,0 +1,14 @@
+*
+!vercel.json
+!web/
+!web/package.json
+!web/package-lock.json
+!web/tsconfig.json
+!web/index.html
+!web/src/
+!web/src/**
+web/src/*.test.ts
+!web/public/
+!web/public/connect.html
+!web/public/downloads/
+!web/public/downloads/network_dashboard-0.1.0-py3-none-any.whl

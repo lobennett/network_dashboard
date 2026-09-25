@@ -1,4 +1,5 @@
 import { get } from "./api";
+import { openRecordedFile } from "./document";
 import { element, details, type RecordRow } from "./review";
 import { scanPrefix } from "./scans";
 import { reviewMetrics, humanize, type Subject, type Stage } from "./pipeline";
@@ -196,11 +197,7 @@ export class ScanInspector {
           button.title = file.path;
           button.onclick = () => {
             if (!isImage(file.path)) {
-              window.open(
-                `/api/artifacts/${file.id}/content`,
-                "_blank",
-                "noopener,noreferrer",
-              );
+              void openRecordedFile(file.id, file.path);
               return;
             }
             void this.preview(file, display, generation);
@@ -350,10 +347,8 @@ export class ScanInspector {
         details(data.artifact),
       );
       if (/\.(json|tsv|txt|log|html)$/.test(data.artifact.path)) {
-        const open = element("a", "Open recorded file");
-        open.href = `/api/artifacts/${encodeURIComponent(id)}/content`;
-        open.target = "_blank";
-        open.rel = "noopener noreferrer";
+        const open = element("button", "Open recorded file");
+        open.onclick = () => void openRecordedFile(id, data.artifact.path);
         display.append(open);
       }
       if (data.ancestry === "unrecorded")

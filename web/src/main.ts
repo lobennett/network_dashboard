@@ -1,7 +1,8 @@
 import "./styles.css";
 import { get } from "./api";
 import { element, type RecordRow } from "./review";
-import { renderScans } from "./scans";
+import { renderScans, scanPrefix } from "./scans";
+import { flywheelInventory } from "./flywheel";
 import { workflow, stageDetail } from "./workflow";
 import { rawScans, scanOutcome, type Subject, type Stage } from "./pipeline";
 import { ScanInspector } from "./inspector";
@@ -25,6 +26,22 @@ function chooseStage(stage: Stage) {
   if (!data) return;
   find("workflow").replaceChildren(workflow(data, stage, chooseStage));
   find("stage-detail").replaceChildren(stageDetail(data, stage));
+  document.querySelector<HTMLElement>(".review-workspace")!.hidden =
+    stage === "source";
+  if (stage === "source")
+    find("stage-detail").append(
+      flywheelInventory(data, (prefix) => {
+        const scan = rawScans(data!).find((s) =>
+          prefix.includes(scanPrefix(s) + "_"),
+        );
+        if (scan) {
+          selectedScan = scan;
+          chooseStage("bids");
+        } else
+          find("notice").textContent =
+            "This planned destination is not indexed as a BOLD/T1w/T2w scan in this snapshot.";
+      }),
+    );
   document
     .querySelector(".review-workspace")!
     .classList.toggle("subject-outputs", stage === "surfaces");
@@ -96,4 +113,33 @@ async function start() {
     find("freshness").textContent = "Index unavailable";
   }
 }
-void start();
+if (import.meta.env.VITE_API_BASE_URL) {
+  find("freshness").textContent = "Not connected";
+  const connect = element("button", "Connect to local study");
+  connect.onclick = async () => {
+    connect.disabled = true;
+    await start();
+    connect.disabled = false;
+    if (data) connection.remove();
+  };
+  const connection = element("section", undefined, "connection");
+  const instructions = element("a", "Setup instructions");
+  instructions.href = "/connect.html";
+  connection.append(
+    element("h2", "Connect through Sherlock"),
+    element(
+      "p",
+      "Start the local study service using your Sherlock account and russpold Oak access. Then connect and allow this site to access your local network when your browser asks.",
+    ),
+    connect,
+    instructions,
+    element(
+      "p",
+      "Study records and images travel directly from your local service to this browser. Vercel hosts only the interface.",
+      "muted",
+    ),
+  );
+  find("notice").before(connection);
+} else {
+  void start();
+}

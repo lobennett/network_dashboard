@@ -4,26 +4,37 @@ import json
 from pathlib import Path
 import re
 from typing import Literal
+from urllib.parse import urlsplit
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import FileResponse, JSONResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.trustedhost import TrustedHostMiddleware
+from starlette.middleware.cors import CORSMiddleware
 
 from network_dashboard.artifacts import content_path
 from network_dashboard.records import connect, rows, dataset_roots
 
 
-def create_app(index: Path, study: Path, web: Path | None = None) -> FastAPI:
+def create_app(index: Path, study: Path, web: Path | None = None, *, allowed_origins: list[str] | None = None) -> FastAPI:
     index, study = Path(index), Path(study).resolve()
+    allowed_origins = allowed_origins or []
+    for origin in allowed_origins:
+        parsed = urlsplit(origin)
+        if parsed.scheme != 'https' or not parsed.hostname or parsed.username or parsed.password or parsed.path or parsed.query or parsed.fragment or '*' in origin:
+            raise ValueError('Allowed dashboard origins must be exact HTTPS origins')
     app = FastAPI(title="Network pipeline", docs_url=None, redoc_url=None)
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=["localhost", "127.0.0.1", "[::1]", "testserver"])
+    app.add_middleware(CORSMiddleware, allow_origins=allowed_origins, allow_methods=['GET'],
+                       allow_headers=['Range'], allow_credentials=True,
+                       allow_private_network=bool(allowed_origins))
 
     @app.middleware("http")
     async def same_origin(request, call_next):
         origin = request.headers.get("origin")
         expected = f"{request.url.scheme}://{request.headers.get('host', '')}"
-        if (origin is not None and origin != expected) or request.headers.get("sec-fetch-site") == "cross-site":
+        trusted_frontend = origin in allowed_origins
+        if not trusted_frontend and ((origin is not None and origin != expected) or request.headers.get("sec-fetch-site") == "cross-site"):
             return JSONResponse({"detail": "Cross-origin access is forbidden"}, status_code=403)
         return await call_next(request)
 
