@@ -6,7 +6,7 @@ holds the canonical data; the dashboard uses a disposable local cache.
 With uv, SSH, and a Sherlock account with russpold Oak access:
 
 ```bash
-uvx --python 3.12 --from https://network-dashboard-devloganbennetts-projects.vercel.app/downloads/network_dashboard-0.3.1-py3-none-any.whl network-dashboard connect --ssh YOUR_SUNET_ID@login.sherlock.stanford.edu
+uvx --python 3.12 --from https://network-dashboard-devloganbennetts-projects.vercel.app/downloads/network_dashboard-0.4.0-py3-none-any.whl network-dashboard connect --ssh YOUR_SUNET_ID@login.sherlock.stanford.edu
 ```
 
 Complete authentication, leave the command running, and open the
@@ -19,7 +19,8 @@ Anatomy and surfaces require recorded defacing ancestry. Manual surface decision
 remain in the pipeline’s review file; the dashboard never approves scans.
 
 For an existing local DataLad clone, use `network-dashboard --study PATH --index PATH`.
-See [sharing](docs/sharing.md) for index publication and deployment.
+See [sharing](docs/sharing.md) for deployment and [analysis handoff](docs/analysis-handoff.md)
+for timing, exclusions, downloadable manifests, and saved design previews.
 
 ## Development
 

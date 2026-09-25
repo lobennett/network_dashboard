@@ -1,10 +1,12 @@
 import { get } from "./api";
+import { surfaceGroup, surfaceLabel } from "./surface-groups";
+import { taskPreview } from "./task-preview";
 import { openRecordedFile } from "./document";
 import { element, details, type RecordRow } from "./review";
 import { scanPrefix } from "./scans";
 import { reviewMetrics, humanize, type Subject, type Stage } from "./pipeline";
 import { viewFile } from "./viewer";
-import { provenanceTree, type Provenance } from './provenance';
+import { provenanceTree, type Provenance } from "./provenance";
 type Artifact = {
   id: string;
   path: string;
@@ -171,10 +173,16 @@ export class ScanInspector {
         );
         if (generation !== this.generation || view !== viewGeneration) return;
         files = files.filter(belongsToSelection);
-        const available = files.filter((f) => f.preview_available || f.fetch_available);
+        const available = files.filter(
+          (f) =>
+            (f.preview_available || f.fetch_available) &&
+            (!f.path.includes("/surf/") ||
+              /\/(lh|rh)\.(white|pial|inflated)$/.test(f.path)),
+        );
         const choices = element("div", "", "preview-choices");
         const display = element("div", "", "preview-display");
         content.replaceChildren(choices, display);
+        choices.classList.toggle("surface-controls", subjectOutputs);
         const unique = [
           ...new Map(
             available.map((f) => [`${f.path}/${f.content_id}`, f]),
@@ -186,17 +194,70 @@ export class ScanInspector {
             Number(a.path.includes("echo-2")),
         );
         if (subjectOutputs) {
-          for (const norm of unique.filter(f => f.path.endsWith('/mri/norm.mgz'))) {
-            const ribbon = unique.find(f => f.dataset_id === norm.dataset_id && f.path === norm.path.replace(/norm\.mgz$/, 'ribbon.mgz'));
+          for (const norm of unique.filter((f) =>
+            f.path.endsWith("/mri/norm.mgz"),
+          )) {
+            const ribbon = unique.find(
+              (f) =>
+                f.dataset_id === norm.dataset_id &&
+                f.path === norm.path.replace(/norm\.mgz$/, "ribbon.mgz"),
+            );
             if (ribbon) {
-              const button = element('button', 'Inspect ribbon over anatomy', 'primary');
+              const button = element(
+                "button",
+                "Inspect ribbon over anatomy",
+                "primary",
+              );
               button.title = norm.path;
-              button.onclick = () => void this.preview(norm, display, generation, [ribbon]);
+              button.onclick = () =>
+                void this.preview(norm, display, generation, [ribbon]);
               choices.append(button);
             }
           }
         }
-        for (const file of unique) {
+        if (subjectOutputs) {
+          for (const group of [
+            "Anatomy",
+            "Segmentations",
+            "Cortical surfaces",
+            "Other outputs",
+          ]) {
+            const members = unique.filter(
+              (f) => surfaceGroup(f.path) === group,
+            );
+            if (!members.length) continue;
+            const block = element("details", "", "surface-group");
+            block.open = group !== "Other outputs";
+            block.append(element("summary", group));
+            const select = element("select");
+            select.setAttribute("aria-label", group);
+            members.forEach((f, i) => {
+              const option = element(
+                "option",
+                `${surfaceLabel(f.path)} · ${f.content_id.slice(-6)}`,
+              );
+              option.value = String(i);
+              select.append(option);
+            });
+            const view = element("button", "View", "primary");
+            view.onclick = () =>
+              void this.preview(
+                members[Number(select.value)],
+                display,
+                generation,
+              );
+            const trace = element("button", "Trace file", "text-button");
+            trace.onclick = () =>
+              void this.lineage(
+                members[Number(select.value)].id,
+                display,
+                generation,
+              );
+            block.append(select, view, trace);
+            choices.append(block);
+          }
+        }
+        for (const file of subjectOutputs ? [] : unique) {
           const label = isImage(file.path)
             ? `View ${subjectOutputs ? file.path.split("/").pop() : (file.path.match(/echo-\d+/)?.[0] ?? file.path.match(/_(fieldmap|magnitude)\.nii/)?.[1] ?? scan.suffix)} in NiiVue`
             : /_(bold|T1w|T2w)\.html$/.test(file.path)
@@ -207,7 +268,9 @@ export class ScanInspector {
             label,
             isImage(file.path) ? "primary" : "",
           );
-          button.title = file.path + (file.fetch_available ? ' — downloads from Oak when opened' : '');
+          button.title =
+            file.path +
+            (file.fetch_available ? " — downloads from Oak when opened" : "");
           button.onclick = () => {
             if (!isImage(file.path)) {
               void openRecordedFile(file.id, file.path);
@@ -238,7 +301,9 @@ export class ScanInspector {
               "muted",
             ),
           );
-        const unavailable = files.filter((f) => !f.preview_available && !f.fetch_available);
+        const unavailable = files.filter(
+          (f) => !f.preview_available && !f.fetch_available,
+        );
         if (unavailable.length) {
           const block = element("details", "", "unavailable");
           block.append(
@@ -288,17 +353,33 @@ export class ScanInspector {
           content.replaceChildren(element("p", String(error), "gap"));
       }
     };
-    for (const [label, action] of [
+    const showTask = async () => {
+      const view = ++viewGeneration;
+      this.load++;
+      this.viewer?.cleanup();
+      this.viewer = undefined;
+      await taskPreview(
+        content,
+        scanQuery,
+        () => generation === this.generation && view === viewGeneration,
+      );
+    };
+    const tabs: [string, () => void | Promise<void>][] = [
       ["Images & reports", showFiles],
+      ...(!subjectOutputs && scan.suffix === "bold"
+        ? [["Events & design", showTask] as [string, () => Promise<void>]]
+        : []),
       [
         "Evidence",
         () => {
           viewGeneration++;
+          this.load++;
           showEvidence();
         },
       ],
       ["Files & provenance", showIndexedFiles],
-    ] as const) {
+    ];
+    for (const [label, action] of tabs) {
       const button = element("button", label);
       button.onclick = () => {
         navigation
@@ -360,8 +441,8 @@ export class ScanInspector {
         element("h3", "File provenance"),
         details(data.artifact),
       );
-      const tree = element('button', 'Show provenance tree', 'primary');
-      const treePanel = element('div');
+      const tree = element("button", "Show provenance tree", "primary");
+      const treePanel = element("div");
       tree.onclick = async () => {
         tree.disabled = true;
         try {
@@ -369,8 +450,10 @@ export class ScanInspector {
           if (generation === this.generation && load === this.load)
             treePanel.replaceChildren(provenanceTree(history));
         } catch (error) {
-          treePanel.replaceChildren(element('p', String(error), 'gap'));
-        } finally { tree.disabled = false; }
+          treePanel.replaceChildren(element("p", String(error), "gap"));
+        } finally {
+          tree.disabled = false;
+        }
       };
       display.append(tree, treePanel);
       if (/\.(json|tsv|txt|log|html)$/.test(data.artifact.path)) {

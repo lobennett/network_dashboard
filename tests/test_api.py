@@ -228,3 +228,18 @@ def test_only_explicit_shared_frontend_can_read_local_api(study):
     response=shared.options('/api/subjects',headers={**headers,'Access-Control-Request-Method':'GET','Access-Control-Request-Private-Network':'true'})
     assert response.status_code==200
     assert response.headers['access-control-allow-private-network']=='true'
+
+
+def test_table_preview_checks_bytes_and_original_artifact_name(study):
+    root, index = study
+    path = root / 'run_events.tsv'
+    path.write_text('onset\tduration\ttrial_type\n1\t0\tgo\n')
+    with sqlite3.connect(index) as db:
+        db.execute('INSERT INTO artifact_versions VALUES (?,?,?,?,?)', ('events', 'study', path.name,
+                   'sha256:' + hashlib.sha256(path.read_bytes()).hexdigest(), '{}'))
+    response = client(study).get('/api/artifacts/events/table')
+    assert response.status_code == 200
+    assert response.json()['rows'][0]['trial_type'] == 'go'
+    path.write_text('changed')
+    assert client(study).get('/api/artifacts/events/table').status_code == 409
+    assert client(study).get('/api/artifacts/report/table').status_code == 400

@@ -1,5 +1,5 @@
 import "./styles.css";
-import { get } from "./api";
+import { get, apiUrl } from "./api";
 import { element, type RecordRow } from "./review";
 import { renderScans, scanPrefix } from "./scans";
 import { flywheelInventory } from "./flywheel";
@@ -10,7 +10,7 @@ import { ScanInspector } from "./inspector";
 const app = document.querySelector<HTMLDivElement>("#app")!;
 app.innerHTML = `<header><div><strong>Network</strong><span>Pipeline review</span></div><span id="freshness" role="status">Loading snapshot…</span></header>
 <div class="workspace"><aside><h2>Subjects</h2><nav id="subjects" aria-label="Subjects"></nav><p class="aside-note">Read-only review<br>Recorded in DataLad</p></aside>
-<main><div id="notice" role="alert"></div><div class="subject-heading"><h1 id="subject-title">Select a subject</h1><span class="muted">Acquisition to derivatives</span></div>
+<main><div id="notice" role="alert"></div><div class="subject-heading"><h1 id="subject-title">Select a subject</h1><span id="manifest-downloads" class="manifest-downloads"></span></div>
 <div id="workflow"></div><div id="stage-detail"></div>
 <section class="review-workspace" aria-label="Scan review"><div class="scan-section"><div class="scan-section-heading"><h2>Scans</h2><span id="scan-counts" class="muted"></span></div><div id="scan-list"></div></div><article id="inspector" aria-label="Selected scan"></article></section>
 </main></div>`;
@@ -60,6 +60,7 @@ async function chooseSubject(subject: string) {
   find("subject-title").textContent = `sub-${subject}`;
   find("scan-counts").textContent = "";
   find("notice").textContent = "";
+  find("manifest-downloads").replaceChildren();
   document
     .querySelectorAll<HTMLButtonElement>("#subjects button")
     .forEach((b) =>
@@ -69,6 +70,20 @@ async function chooseSubject(subject: string) {
     const value = await get<Subject>(`subjects/${encodeURIComponent(subject)}`);
     if (current !== request) return;
     data = value;
+    const downloads = find("manifest-downloads");
+    downloads.replaceChildren();
+    for (const [format, label] of [
+      ["tsv", "Scan manifest (TSV)"],
+      ["json", "Provenance bundle (JSON)"],
+    ]) {
+      const link = element("a", label);
+      link.href = apiUrl(
+        `subjects/${encodeURIComponent(subject)}/manifest?format=${format}`,
+      );
+      link.target = "_blank";
+      link.rel = "noopener";
+      downloads.append(link);
+    }
     const outcomes = rawScans(data).map((scan) => scanOutcome(value, scan));
     find("scan-counts").textContent =
       `${outcomes.filter((o) => o.pending).length} need review / ${outcomes.filter((o) => o.flagged).length} flagged`;

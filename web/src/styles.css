@@ -14,11 +14,30 @@
 * {
   box-sizing: border-box;
 }
-.provenance-tree { overflow-wrap: anywhere; }
-.provenance-tree details { margin: 12px 0; padding-left: 12px; border-left: 2px solid var(--rule); }
-.provenance-tree summary { cursor: pointer; color: var(--cardinal); font-weight: 600; }
-.provenance-tree code { display: block; font-size: 11px; color: var(--muted); margin-top: 8px; }
-.provenance-transform { margin: 12px 0 12px 8px; padding: 12px; background: var(--wash); }
+.provenance-tree {
+  overflow-wrap: anywhere;
+}
+.provenance-tree details {
+  margin: 12px 0;
+  padding-left: 12px;
+  border-left: 2px solid var(--rule);
+}
+.provenance-tree summary {
+  cursor: pointer;
+  color: var(--cardinal);
+  font-weight: 600;
+}
+.provenance-tree code {
+  display: block;
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 8px;
+}
+.provenance-transform {
+  margin: 12px 0 12px 8px;
+  padding: 12px;
+  background: var(--wash);
+}
 body {
   margin: 0;
 }
@@ -626,4 +645,78 @@ a {
 .subject-outputs #inspector {
   max-width: 1000px;
   width: 100%;
+}
+
+/* Compact anatomical controls keep the image directly below the selectors. */
+.surface-controls {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.75rem;
+  align-items: start;
+}
+.surface-controls > .primary {
+  grid-column: 1 / -1;
+  justify-self: start;
+}
+.surface-group {
+  min-width: 0;
+  padding: 0.65rem;
+  border: 1px solid #ddd9d4;
+  border-radius: 5px;
+}
+.surface-group summary {
+  font-weight: 600;
+  cursor: pointer;
+  margin-bottom: 0.5rem;
+}
+.surface-group select {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  margin-bottom: 0.5rem;
+}
+.surface-group button {
+  padding: 0.35rem 0.6rem;
+}
+.surface-group:last-child {
+  grid-column: 1 / -1;
+}
+.surface-group:last-child select {
+  max-width: 32rem;
+}
+.event-chart {
+  width: 100%;
+  overflow-x: auto;
+  margin-top: 1rem;
+}
+.event-chart svg {
+  width: 100%;
+  min-width: 550px;
+  display: block;
+}
+.event-chart text {
+  font: 12px sans-serif;
+  fill: #2e2d29;
+}
+.inspection-content select {
+  max-width: 100%;
+}
+.file-path {
+  overflow-wrap: anywhere;
+  font-size: 0.8rem;
+}
+.manifest-downloads {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.8rem;
+  font-size: 0.8rem;
+}
+.manifest-downloads a,
+.inspection-content a {
+  color: #8c1515;
+}
+@media (max-width: 900px) {
+  .surface-controls {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }

@@ -7,7 +7,7 @@ from typing import Literal
 from urllib.parse import urlsplit
 
 from fastapi import FastAPI, HTTPException, Query
-from fastapi.responses import FileResponse, JSONResponse, HTMLResponse
+from fastapi.responses import FileResponse, JSONResponse, HTMLResponse, Response
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 from starlette.middleware.cors import CORSMiddleware
@@ -123,6 +123,29 @@ def create_app(index: Path, study: Path, web: Path | None = None, *, allowed_ori
         if not found:
             raise HTTPException(404, "Unknown artifact")
         return found[0]
+
+    @app.get("/api/subjects/{subject}/manifest")
+    def manifest(subject: str, format: Literal['json', 'tsv'] = 'json'):
+        from network_dashboard.manifest import subject_manifest, scan_tsv
+        if not re.fullmatch(r'[A-Za-z0-9]+', subject):
+            raise HTTPException(404, 'Unknown subject')
+        with connect(index) as db:
+            value = subject_manifest(db, subject)
+        headers = {'Cache-Control': 'no-store',
+                   'Content-Disposition': f'attachment; filename="sub-{subject}_manifest.{format}"'}
+        if format == 'tsv':
+            return Response(scan_tsv(value), media_type='text/tab-separated-values', headers=headers)
+        return JSONResponse(value, headers=headers)
+
+    @app.get("/api/artifacts/{identity}/table")
+    def table(identity: str):
+        from network_dashboard.tables import read_table, table_kind
+        with connect(index) as db:
+            artifact = get_artifact(db, identity)
+            if not table_kind(artifact['path']):
+                raise HTTPException(400, 'This artifact is not an events or saved design table')
+            path = fetcher(identity) if fetcher else content_path(db, study, artifact)
+            return {**read_table(path, name=artifact['path']), 'artifact': artifact}
 
     @app.get("/api/artifacts/{identity}/lineage")
     def lineage(identity: str):
