@@ -46,14 +46,14 @@ export const stages = [
     title: "Scan review",
     caption: "Manual approval",
     description:
-      "Approve scan decisions before proceeding. Preprocessing retention and task-model eligibility are separate decisions.",
+      "Approve scan decisions before fMRIPrep. Preprocessing retention and task-model eligibility are separate decisions.",
   },
   {
     id: "surfaces",
     title: "FreeSurfer 8.2.0",
     caption: "Reconstruct & review",
     description:
-      "Planned version: FreeSurfer 8.2.0. Inspect ribbon.mgz over norm.mgz in ITK-SNAP, then check white and pial meshes in Freeview. Corrections require reconstruction and repeat review; editing the ribbon alone does not update surfaces. Approve the final reconstruction before fMRIPrep.",
+      "FreeSurfer 8.2.0 can run alongside MRIQC on the selected anatomy. Inspect ribbon.mgz over norm.mgz in ITK-SNAP, then check white and pial meshes in Freeview. Corrections require reconstruction and repeat review; editing the ribbon alone does not update surfaces. Approve the final reconstruction before fMRIPrep.",
   },
   {
     id: "fmriprep",
