@@ -8,6 +8,7 @@ vi.mock("./api", async (original) => ({
 vi.mock("./viewer", () => ({ viewFile: vi.fn() }));
 beforeEach(() => {
   vi.resetModules();
+  window.scrollTo = vi.fn();
   document.body.innerHTML = '<div id="app"></div>';
 });
 afterEach(() => {
@@ -80,12 +81,18 @@ it("an obsolete lineage error cannot replace the newer selected file", async () 
     expect(document.querySelector(".scan-name")).not.toBeNull(),
   );
   document.querySelector<HTMLButtonElement>(".scan-name")!.click();
+  document.querySelector<HTMLButtonElement>(".inspector-tabs button")!.click();
   await vi.waitFor(() =>
-    expect(document.querySelectorAll(".text-button")).toHaveLength(2),
+    expect(document.querySelectorAll(".text-button")).toHaveLength(1),
   );
   const buttons = document.querySelectorAll<HTMLButtonElement>(".text-button");
   buttons[0].click();
-  buttons[1].click();
+  const picker = document.querySelector<HTMLSelectElement>(
+    'select[aria-label="Image or report"]',
+  )!;
+  picker.value = "1";
+  picker.dispatchEvent(new Event("change"));
+  buttons[0].click();
   await vi.waitFor(() =>
     expect(document.querySelector(".preview-display")?.textContent).toContain(
       "b.html",
@@ -113,4 +120,17 @@ it("an open page marks an aging index as not live", async () => {
   expect(document.getElementById("freshness")?.textContent).toContain(
     "Snapshot (not live)",
   );
+});
+
+it("offers the pipeline guide before connecting and returns to review", async () => {
+  vi.stubEnv("VITE_API_BASE_URL", "http://127.0.0.1:18782");
+  await import("./main");
+  location.hash = "pipeline";
+  window.dispatchEvent(new Event("hashchange"));
+  expect(document.getElementById("pipeline-page")!.hidden).toBe(false);
+  expect(document.getElementById("review-page")!.hidden).toBe(true);
+  expect(get).not.toHaveBeenCalled();
+  location.hash = "review";
+  window.dispatchEvent(new Event("hashchange"));
+  expect(document.getElementById("review-page")!.hidden).toBe(false);
 });

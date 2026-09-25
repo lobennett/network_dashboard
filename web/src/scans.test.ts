@@ -37,7 +37,7 @@ it("shows real scan metrics and keeps analysis exclusions separate from processi
   );
   expect(panel.textContent).toContain("150");
   expect(panel.textContent).toContain("0.210");
-  expect(panel.textContent).toContain("keep");
+  expect(panel.textContent).toContain("Keep for processing");
   expect(panel.textContent).toContain("exclude");
   panel.querySelector("button")!.click();
   expect(select).toHaveBeenCalledWith(

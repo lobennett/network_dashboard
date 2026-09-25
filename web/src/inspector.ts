@@ -113,13 +113,15 @@ export class ScanInspector {
         element(
           "strong",
           d.scope === "preprocessing"
-            ? "Preprocessing: "
+            ? "Processing: "
             : d.scope === "task_first_level"
               ? "Task models: "
-              : `${humanize(d.scope)}: `,
+              : d.scope === "surface"
+                ? "Surface review: "
+                : `${humanize(d.scope)}: `,
         ),
         document.createTextNode(
-          `${humanize(d.decision)}${d.reviewer ? ` · ${d.reviewer}` : ""}${d.reason ? ` — ${d.reason}` : ""}`,
+          `${d.scope === "surface" ? (d.decision === "yes" ? "Approved" : "Awaiting approval") : d.decision === "keep" ? "Keep" : d.decision === "exclude" ? "Excluded" : humanize(d.decision)}${d.reviewer ? ` · ${d.reviewer}` : ""}${d.reason ? ` — ${d.reason}` : ""}`,
         ),
       );
       outcome.append(row);
@@ -129,7 +131,7 @@ export class ScanInspector {
         element(
           "p",
           `Flagged during scan review: ${humanize(m.flags)}. ${m.approval_required === "yes" ? (m.approved === "yes" ? "Review approved." : "Review required.") : "No manual approval required."}`,
-          "gap",
+          m.approved === "yes" ? "reviewed-note" : "gap",
         ),
       );
     this.panel.append(outcome);
@@ -140,7 +142,11 @@ export class ScanInspector {
       this.viewer?.cleanup();
       this.viewer = undefined;
       content.replaceChildren(element("h3", "Recorded evidence"));
-      if (Object.keys(m).length) content.append(details(m));
+      if (Object.keys(m).length) {
+        const metrics = element("details");
+        metrics.append(element("summary", "All recorded metrics"), details(m));
+        content.append(metrics);
+      }
       for (const f of data.findings.filter(
         (f) =>
           f.entity_key === scan.entity_key && f.finding_type !== "scan-review",
@@ -257,39 +263,52 @@ export class ScanInspector {
             choices.append(block);
           }
         }
-        for (const file of subjectOutputs ? [] : unique) {
-          const label = isImage(file.path)
-            ? `View ${subjectOutputs ? file.path.split("/").pop() : (file.path.match(/echo-\d+/)?.[0] ?? file.path.match(/_(fieldmap|magnitude)\.nii/)?.[1] ?? scan.suffix)} in NiiVue`
-            : /_(bold|T1w|T2w)\.html$/.test(file.path)
-              ? "Open MRIQC report"
+        if (!subjectOutputs && unique.length) {
+          const picker = element("select");
+          picker.setAttribute("aria-label", "Image or report");
+          unique.forEach((file, index) => {
+            const name = file.path.split("/").pop()!;
+            const option = element(
+              "option",
+              `${name} · ${file.content_id?.slice(-6) ?? "unrecorded"}`,
+            );
+            option.value = String(index);
+            picker.append(option);
+          });
+          const open = element("button", "", "primary");
+          const trace = element("button", "File history", "text-button");
+          const update = () => {
+            const file = unique[Number(picker.value)];
+            open.textContent = isImage(file.path)
+              ? "Open image"
               : "Open report";
-          const button = element(
-            "button",
-            label,
-            isImage(file.path) ? "primary" : "",
-          );
-          button.title =
-            file.path +
-            (file.fetch_available ? " — downloads from Oak when opened" : "");
-          button.onclick = () => {
-            if (!isImage(file.path)) {
-              void openRecordedFile(file.id, file.path);
-              return;
-            }
-            void this.preview(file, display, generation);
+            open.title =
+              file.path +
+              (file.fetch_available ? " — downloads from Oak when opened" : "");
           };
-          choices.append(button);
-          const lineage = element("button", "Trace file", "text-button");
-          lineage.title = file.path;
-          lineage.onclick = () =>
-            void this.lineage(file.id, display, generation);
-          choices.append(lineage);
+          picker.onchange = update;
+          update();
+          open.onclick = () => {
+            const file = unique[Number(picker.value)];
+            if (isImage(file.path))
+              void this.preview(file, display, generation);
+            else void openRecordedFile(file.id, file.path);
+          };
+          trace.onclick = () =>
+            void this.lineage(
+              unique[Number(picker.value)].id,
+              display,
+              generation,
+            );
+          choices.append(picker, open, trace);
         }
         if (!unique.length)
           display.append(
             element(
               "p",
-              "No previewable images or reports are available in this local snapshot.",
+              stage === "fmriprep"
+                ? "No fMRIPrep outputs are available in this snapshot. They appear after results are merged and the snapshot is refreshed."
+                : "No previewable images or reports are available in this snapshot. Use File history to inspect recorded outputs.",
               "empty",
             ),
           );
@@ -297,7 +316,7 @@ export class ScanInspector {
           display.append(
             element(
               "p",
-              "Choose an image to open NiiVue. Scroll over a slice to move through it; drag to adjust the view.",
+              "Choose an image or report above. In NiiVue, scroll to move through slices; drag to adjust the view.",
               "muted",
             ),
           );
@@ -370,14 +389,14 @@ export class ScanInspector {
         ? [["Events & design", showTask] as [string, () => Promise<void>]]
         : []),
       [
-        "Evidence",
+        "Decisions & metrics",
         () => {
           viewGeneration++;
           this.load++;
           showEvidence();
         },
       ],
-      ["Files & provenance", showIndexedFiles],
+      ["File history", showIndexedFiles],
     ];
     for (const [label, action] of tabs) {
       const button = element("button", label);
@@ -390,7 +409,15 @@ export class ScanInspector {
       navigation.append(button);
     }
     this.panel.append(navigation, content);
-    (navigation.firstElementChild as HTMLButtonElement).click();
+    const initialTab =
+      stage === "events"
+        ? 1
+        : stage === "review"
+          ? scan.suffix === "bold"
+            ? 2
+            : 1
+          : 0;
+    (navigation.children[initialTab] as HTMLButtonElement).click();
   }
   private load = 0;
   private async preview(

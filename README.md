@@ -14,6 +14,10 @@ Complete authentication, leave the command running, and open the
 Images and reports download when opened; restart the command to refresh records.
 No local DataLad installation is needed. See [setup](web/public/connect.html).
 
+Use **Review data** to inspect scans, surfaces and Flywheel selections.
+The **Pipeline guide** shows the source-to-fMRIPrep workflow and both approval gates;
+it opens without a data connection.
+
 NiiVue displays BOLD, fieldmap/magnitude images, and FreeSurfer volumes/surfaces.
 Anatomy and surfaces require recorded defacing ancestry. Manual surface decisions
 remain in the pipeline’s review file; the dashboard never approves scans.

@@ -60,7 +60,7 @@ it("cleans up a pending preview when evidence replaces its detached canvas", asy
   );
   panel.querySelector<HTMLButtonElement>(".primary")!.click();
   panel
-    .querySelectorAll<HTMLButtonElement>(".inspector-tabs button")[1]
+    .querySelectorAll<HTMLButtonElement>(".inspector-tabs button")[2]
     .click();
   const cleanup = vi.fn();
   complete({ cleanup } as unknown as Awaited<ReturnType<typeof viewFile>>);
@@ -87,19 +87,35 @@ it("shows subject-level surface decisions and queries the standalone reconstruct
     scan,
     "surfaces",
   );
-  expect(panel.textContent).toContain("surface: yes · LB — Inspected");
+  expect(panel.textContent).toContain(
+    "Surface review: Approved · LB — Inspected",
+  );
   expect(vi.mocked(get)).toHaveBeenCalledWith(
     expect.stringContaining("subject=s03&dataset_stage=freesurfer"),
   );
 });
 
-it('offers fetching registered Oak images without treating blocked anatomy as fetchable', async () => {
+it("offers fetching registered Oak images without treating blocked anatomy as fetchable", async () => {
   vi.mocked(get).mockResolvedValue([
-    {id: 'remote', path: 'scan_bold.nii.gz', preview_available: false, fetch_available: true},
-    {id: 'blocked', path: 'scan_T1w.nii.gz', preview_available: false, fetch_available: false},
+    {
+      id: "remote",
+      path: "scan_bold.nii.gz",
+      preview_available: false,
+      fetch_available: true,
+    },
+    {
+      id: "blocked",
+      path: "scan_T1w.nii.gz",
+      preview_available: false,
+      fetch_available: false,
+    },
   ]);
-  const panel = document.querySelector('article')!;
-  await new ScanInspector(panel).show(data, scan, 'mriqc');
-  await vi.waitFor(() => expect(panel.querySelectorAll('.primary')).toHaveLength(1));
-  expect(panel.querySelector('.primary')?.getAttribute('title')).toContain('downloads from Oak');
+  const panel = document.querySelector("article")!;
+  await new ScanInspector(panel).show(data, scan, "mriqc");
+  await vi.waitFor(() =>
+    expect(panel.querySelectorAll(".primary")).toHaveLength(1),
+  );
+  expect(panel.querySelector(".primary")?.getAttribute("title")).toContain(
+    "downloads from Oak",
+  );
 });

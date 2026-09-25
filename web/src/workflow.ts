@@ -9,38 +9,19 @@ import {
   type Stage,
 } from "./pipeline";
 
-export function workflow(
-  data: Subject,
-  active: Stage,
-  select: (stage: Stage) => void,
-): HTMLElement {
-  const diagram = element("nav", "", "pipeline");
-  diagram.setAttribute("aria-label", "Pipeline stages");
-  stages.forEach((stage, index) => {
-    const button = element("button", "", "stage");
-    button.setAttribute("aria-pressed", String(stage.id === active));
-    const status =
-      stage.id === "source" && acquisitionRecords(data).length
-        ? "Inventory recorded"
-        : stageStatus(stage.id, data.attempts);
-    button.append(
-      element("span", String(index + 1).padStart(2, "0"), "step-number"),
-      element("strong", stage.title),
-      element("small", stage.caption),
-      element("span", status, `stage-status ${status.toLowerCase()}`),
-    );
-    button.onclick = () => select(stage.id);
-    diagram.append(button);
-  });
-  return diagram;
-}
 export function stageDetail(data: Subject, active: Stage): HTMLElement {
   const stage = stages.find((s) => s.id === active)!;
-  const panel = element("section", "", "stage-detail");
-  const heading = element("div", "", "stage-heading");
+  const panel = element("details", "", "stage-detail");
+  const heading = element("summary", "", "stage-heading");
   heading.append(
-    element("h2", stage.title),
-    element("span", active === "source" && acquisitionRecords(data).length ? "Inventory recorded" : stageStatus(active, data.attempts), "badge"),
+    element("strong", `${stage.title}: stage details & processing records`),
+    element(
+      "span",
+      active === "source" && acquisitionRecords(data).length
+        ? "Inventory recorded"
+        : stageStatus(active, data.attempts),
+      "badge",
+    ),
   );
   panel.append(heading, element("p", stage.description));
   const rows = data.attempts.filter(

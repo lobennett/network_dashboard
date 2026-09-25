@@ -1,19 +1,23 @@
 import "./styles.css";
+import "./layout.css";
 import { get, apiUrl } from "./api";
 import { element, type RecordRow } from "./review";
 import { renderScans, scanPrefix } from "./scans";
 import { flywheelInventory } from "./flywheel";
-import { workflow, stageDetail } from "./workflow";
+import { stageDetail } from "./workflow";
 import { rawScans, scanOutcome, type Subject, type Stage } from "./pipeline";
 import { ScanInspector } from "./inspector";
+import { initialScan, subjectSummary, reviewControls } from "./review-layout";
+import { pipelineGuide } from "./pipeline-guide";
 
 const app = document.querySelector<HTMLDivElement>("#app")!;
-app.innerHTML = `<header><div><strong>Network</strong><span>Pipeline review</span></div><span id="freshness" role="status">Loading snapshot…</span></header>
-<div class="workspace"><aside><h2>Subjects</h2><nav id="subjects" aria-label="Subjects"></nav><p class="aside-note">Read-only review<br>Recorded in DataLad</p></aside>
-<main><div id="notice" role="alert"></div><div class="subject-heading"><h1 id="subject-title">Select a subject</h1><span id="manifest-downloads" class="manifest-downloads"></span></div>
-<div id="workflow"></div><div id="stage-detail"></div>
+app.innerHTML = `<a class="skip-link" href="#review-page">Skip to content</a>
+<header><a class="brand" href="#review">Network<span>Data review</span></a><nav class="page-nav" aria-label="Pages"><a href="#review">Review data</a><a href="#pipeline">Pipeline guide</a></nav><span id="freshness" role="status">Snapshot not loaded</span></header>
+<div class="workspace" id="review-page"><aside><h2>Subjects</h2><nav id="subjects" aria-label="Subjects"></nav><p class="aside-note">Read-only review<br>Recorded in DataLad</p><a class="aside-help" href="/connect.html">Connection help</a></aside>
+<main><div id="notice" role="alert"></div><div class="subject-heading"><div><h1 id="subject-title">Review data</h1><p class="subject-caption">Inspect outputs and understand which runs to use.</p></div><details class="download-menu"><summary>Download records</summary><div id="manifest-downloads" class="manifest-downloads"></div></details></div>
+<div id="subject-summary"></div><div id="workflow"></div><div id="stage-detail"></div><div id="source-content"></div>
 <section class="review-workspace" aria-label="Scan review"><div class="scan-section"><div class="scan-section-heading"><h2>Scans</h2><span id="scan-counts" class="muted"></span></div><div id="scan-list"></div></div><article id="inspector" aria-label="Selected scan"></article></section>
-</main></div>`;
+</main></div><main id="pipeline-page" hidden></main>`;
 const find = <T extends HTMLElement = HTMLElement>(id: string) =>
   document.getElementById(id) as T;
 const inspector = new ScanInspector(find("inspector"));
@@ -21,21 +25,39 @@ let active: Stage = "review",
   data: Subject | undefined,
   selectedScan: RecordRow | undefined,
   request = 0;
+function refreshScanList() {
+  if (!data) return;
+  const value = data;
+  find("scan-list").replaceChildren(
+    renderScans(
+      value,
+      (scan) => {
+        selectedScan = scan;
+        void inspector.show(value, scan, active);
+        if (window.innerWidth < 1000)
+          find("inspector").scrollIntoView({ block: "start" });
+      },
+      selectedScan,
+    ),
+  );
+}
 function chooseStage(stage: Stage) {
   active = stage;
   if (!data) return;
-  find("workflow").replaceChildren(workflow(data, stage, chooseStage));
+  find("workflow").replaceChildren(reviewControls(stage, chooseStage));
   find("stage-detail").replaceChildren(stageDetail(data, stage));
   document.querySelector<HTMLElement>(".review-workspace")!.hidden =
     stage === "source";
+  find("source-content").replaceChildren();
   if (stage === "source")
-    find("stage-detail").append(
+    find("source-content").append(
       flywheelInventory(data, (prefix) => {
         const scan = rawScans(data!).find((s) =>
           prefix.includes(scanPrefix(s) + "_"),
         );
         if (scan) {
           selectedScan = scan;
+          refreshScanList();
           chooseStage("bids");
         } else
           find("notice").textContent =
@@ -55,7 +77,7 @@ async function chooseSubject(subject: string) {
   data = undefined;
   selectedScan = undefined;
   inspector.clear();
-  for (const id of ["workflow", "stage-detail", "scan-list"])
+  for (const id of ["workflow", "stage-detail", "scan-list", "subject-summary"])
     find(id).replaceChildren(element("p", "Loading…", "muted"));
   find("subject-title").textContent = `sub-${subject}`;
   find("scan-counts").textContent = "";
@@ -70,6 +92,8 @@ async function chooseSubject(subject: string) {
     const value = await get<Subject>(`subjects/${encodeURIComponent(subject)}`);
     if (current !== request) return;
     data = value;
+    selectedScan = initialScan(value);
+    find("subject-summary").replaceChildren(subjectSummary(value));
     const downloads = find("manifest-downloads");
     downloads.replaceChildren();
     for (const [format, label] of [
@@ -87,12 +111,7 @@ async function chooseSubject(subject: string) {
     const outcomes = rawScans(data).map((scan) => scanOutcome(value, scan));
     find("scan-counts").textContent =
       `${outcomes.filter((o) => o.pending).length} need review / ${outcomes.filter((o) => o.flagged).length} flagged`;
-    find("scan-list").replaceChildren(
-      renderScans(data, (scan) => {
-        selectedScan = scan;
-        void inspector.show(value, scan, active);
-      }),
-    );
+    refreshScanList();
     chooseStage(active);
   } catch (error) {
     if (current === request) find("notice").textContent = String(error);
@@ -113,6 +132,7 @@ async function start() {
     };
     update();
     window.setInterval(update, 60_000);
+    find("subjects").replaceChildren();
     for (const { subject } of subjects) {
       const button = element("button", `sub-${subject}`);
       button.dataset.subject = subject;
@@ -158,3 +178,30 @@ if (import.meta.env.VITE_API_BASE_URL) {
 } else {
   void start();
 }
+
+find("pipeline-page").append(
+  pipelineGuide((stage) => {
+    location.hash = "review";
+    chooseStage(stage);
+  }),
+);
+function route() {
+  const guide = location.hash === "#pipeline";
+  find("review-page").hidden = guide;
+  find("pipeline-page").hidden = !guide;
+  document.title = guide ? "Pipeline guide · Network" : "Review data · Network";
+  document
+    .querySelectorAll<HTMLAnchorElement>(".page-nav a")
+    .forEach((a) =>
+      a.setAttribute(
+        "aria-current",
+        a.hash === (guide ? "#pipeline" : "#review") ? "page" : "false",
+      ),
+    );
+  document.querySelector<HTMLAnchorElement>(".skip-link")!.href = guide
+    ? "#pipeline-page"
+    : "#review-page";
+  window.scrollTo(0, 0);
+}
+window.addEventListener("hashchange", route);
+route();

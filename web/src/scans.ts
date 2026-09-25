@@ -22,6 +22,7 @@ export function scanPrefix(scan: RecordRow): string {
 export function renderScans(
   data: ScanData,
   select: (scan: RecordRow) => void,
+  selected?: RecordRow,
 ): HTMLElement {
   const panel = element("div", "", "scan-browser");
   const scans = rawScans(data).sort((a, b) =>
@@ -44,14 +45,32 @@ export function renderScans(
     option.value = value;
     queue.append(option);
   }
-  toolbar.append(filter, queue);
+  const kind = element("select");
+  kind.setAttribute("aria-label", "Scan type");
+  for (const [value, label] of [
+    ["bold", "Functional"],
+    ["anatomy", "Anatomy"],
+    ["fmap", "Fieldmaps"],
+    ["all", "All types"],
+  ]) {
+    const option = element("option", label);
+    option.value = value;
+    kind.append(option);
+  }
+  kind.value = selected
+    ? selected.suffix === "bold"
+      ? "bold"
+      : ["T1w", "T2w"].includes(String(selected.suffix))
+        ? "anatomy"
+        : "fmap"
+    : "all";
+  toolbar.append(filter, kind, queue);
   const count = element("p", `${scans.length} scans`, "muted");
   const scroll = element("div", "", "scan-table");
   const table = element("table");
   const head = element("thead");
   const heading = element("tr");
-  for (const text of ["Scan", "TRs", "FD (mm)", "Disposition"])
-    heading.append(element("th", text));
+  for (const text of ["Scan", "Use"]) heading.append(element("th", text));
   head.append(heading);
   const body = element("tbody");
   table.append(head, body);
@@ -64,13 +83,21 @@ export function renderScans(
       (d) => d.entity_key === scan.entity_key && d.scope === "preprocessing",
     );
     const row = element("tr");
+    row.classList.toggle("selected", scan.entity_key === selected?.entity_key);
     const name = element("td");
     const button = element(
       "button",
       String(scan.task ?? scan.suffix),
       "scan-name",
     );
+    button.setAttribute(
+      "aria-pressed",
+      String(scan.entity_key === selected?.entity_key),
+    );
     button.onclick = () => {
+      body
+        .querySelectorAll("button")
+        .forEach((b) => b.setAttribute("aria-pressed", String(b === button)));
       body
         .querySelectorAll("tr")
         .forEach((r) => r.classList.remove("selected"));
@@ -88,7 +115,16 @@ export function renderScans(
         ? Number(m.fd_mean).toFixed(3)
         : "—";
     const disposition = element("td");
-    disposition.append(element("span", String(d?.decision ?? "Unrecorded")));
+    disposition.append(
+      element(
+        "span",
+        d?.decision === "keep"
+          ? "Keep for processing"
+          : d?.decision === "review"
+            ? "Review needed"
+            : String(d?.decision ?? "Not reviewed"),
+      ),
+    );
     if (outcome.flagged)
       disposition.append(
         element(
@@ -104,28 +140,47 @@ export function renderScans(
     if (outcome.analysisExcluded)
       disposition.append(element("small", "Task models: exclude", "excluded"));
     disposition.title = humanize(m.flags ?? "");
-    row.append(
-      name,
-      element("td", String(m.tr_count ?? "—")),
-      element("td", fd),
-      disposition,
-    );
+    if (m.tr_count)
+      name.append(element("small", `${m.tr_count} volumes · FD ${fd} mm`));
+    row.append(name, disposition);
     body.append(row);
     return {
       row,
+      scan,
       outcome,
       text: `${scanPrefix(scan)} ${m.flags ?? ""}`.toLowerCase(),
     };
   });
+  const empty = element("div", "", "empty");
+  empty.append(element("p", "No scans match these filters."));
+  const reset = element("button", "Clear filters");
+  empty.append(reset);
+  panel.append(empty);
   const refresh = () => {
     for (const e of entries)
       e.row.hidden =
         !e.text.includes(filter.value.toLowerCase()) ||
+        (kind.value === "bold" && e.scan.suffix !== "bold") ||
+        (kind.value === "anatomy" &&
+          !["T1w", "T2w"].includes(String(e.scan.suffix))) ||
+        (kind.value === "fmap" &&
+          !["fieldmap", "magnitude"].includes(String(e.scan.suffix))) ||
         (queue.value !== "all" &&
           !e.outcome[queue.value as keyof typeof e.outcome]);
-    count.textContent = `${entries.filter((e) => !e.row.hidden).length} of ${scans.length} scans`;
+    const shown = entries.filter((e) => !e.row.hidden).length;
+    count.textContent = `${shown} of ${scans.length} scans`;
+    empty.hidden = shown > 0;
+    scroll.hidden = shown === 0;
   };
+  reset.onclick = () => {
+    filter.value = "";
+    kind.value = "all";
+    queue.value = "all";
+    refresh();
+  };
+  kind.onchange = refresh;
   filter.oninput = refresh;
   queue.onchange = refresh;
+  refresh();
   return panel;
 }
