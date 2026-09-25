@@ -8,7 +8,8 @@ The service binds to localhost and permits only the configured HTTPS frontend.
 `network-dashboard connect --ssh USER@HOST` uses the pilot at
 `/oak/stanford/groups/russpold/data/network_grant/network-study-pilot-s03` and index at
 `/oak/stanford/groups/russpold/data/network_grant/network-dashboard-cache/records.sqlite`.
-Override these with `--study` and `--index`. `--cache` selects the local cache directory.
+Override these with `--study` and `--index`. Each SSH/study/index combination gets its own cache; matching legacy caches are reused.
+`--cache` selects an explicit directory, which must match that connection.
 Restart to refresh the snapshot. Missing files are fetched on click and checked
 against indexed SHA256 or legacy git-annex MD5 checksums. A first MRIQC report may download its result ZIP.
 
@@ -32,7 +33,7 @@ index. The index is a snapshot, not a live scheduler feed.
 ```bash
 uv build --wheel
 mkdir -p web/public/downloads
-cp dist/network_dashboard-0.4.0-py3-none-any.whl web/public/downloads/
+cp dist/network_dashboard-0.4.1-py3-none-any.whl web/public/downloads/
 vercel --prod
 ```
 

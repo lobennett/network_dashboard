@@ -6,7 +6,7 @@ holds the canonical data; the dashboard uses a disposable local cache.
 With uv, SSH, and a Sherlock account with russpold Oak access:
 
 ```bash
-uvx --python 3.12 --from https://network-dashboard-devloganbennetts-projects.vercel.app/downloads/network_dashboard-0.4.0-py3-none-any.whl network-dashboard connect --ssh YOUR_SUNET_ID@login.sherlock.stanford.edu
+uvx --python 3.12 --from https://network-dashboard-devloganbennetts-projects.vercel.app/downloads/network_dashboard-0.4.1-py3-none-any.whl network-dashboard connect --ssh YOUR_SUNET_ID@login.sherlock.stanford.edu
 ```
 
 Complete authentication, leave the command running, and open the

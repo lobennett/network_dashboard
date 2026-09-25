@@ -21,13 +21,29 @@ DEFAULT_INDEX = OAK + '/network-dashboard-cache/records.sqlite'
 ORIGIN = 'https://network-dashboard-devloganbennetts-projects.vercel.app'
 
 
+def default_cache(config: dict) -> Path:
+    """Reuse matching legacy downloads; isolate other connections automatically."""
+    base = Path.home() / '.cache/network-dashboard'
+    marker = base / 'source.json'
+    if marker.is_file():
+        try:
+            if json.loads(marker.read_text()) == config:
+                return base
+        except (ValueError, OSError):
+            pass
+    identity = hashlib.sha256(json.dumps(config, sort_keys=True).encode()).hexdigest()[:16]
+    return base / identity
+
+
 class RemoteStudy:
-    def __init__(self, host: str, source: Path, index: Path, cache: Path, *, runner=subprocess.run):
+    def __init__(self, host: str, source: Path, index: Path, cache: Path | None = None, *, runner=subprocess.run):
         if not re.fullmatch(r'[A-Za-z0-9_][A-Za-z0-9_.@-]*', host):
             raise ValueError('SSH destination must be a host alias or user@hostname')
         if not source.is_absolute() or not index.is_absolute():
             raise ValueError('Remote study and index paths must be absolute')
         self.host, self.source, self.remote_index = host, source, index
+        config = {'ssh': host, 'study': str(source), 'index': str(index)}
+        cache = cache if cache is not None else default_cache(config)
         self.cache = cache.expanduser().resolve()
         self.study, self.index = self.cache / 'study', self.cache / 'records.sqlite'
         self.runner = runner
@@ -36,9 +52,9 @@ class RemoteStudy:
         self.socket = self.cache / 'ssh.sock'
         self.ssh_options = ['-S', str(self.socket)]
         marker = self.cache / 'source.json'
-        config = {'ssh': host, 'study': str(source), 'index': str(index)}
         if marker.exists() and json.loads(marker.read_text()) != config:
-            raise ValueError('Cache belongs to another study; choose a different --cache directory')
+            raise ValueError(f'Cache {self.cache} belongs to a different SSH connection, study, or index. '
+                             'Omit --cache to select a separate cache automatically, or choose a different directory.')
         marker.write_text(json.dumps(config) + '\n')
 
     def authenticate(self):

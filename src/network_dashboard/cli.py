@@ -41,7 +41,7 @@ def connect_main(argv):
     parser.add_argument('--ssh', required=True, help='your SUNetID@login.sherlock.stanford.edu or SSH host alias')
     parser.add_argument('--study', type=Path, default=Path(DEFAULT_STUDY))
     parser.add_argument('--index', type=Path, default=Path(DEFAULT_INDEX))
-    parser.add_argument('--cache', type=Path, default=Path.home() / '.cache/network-dashboard')
+    parser.add_argument('--cache', type=Path, help='cache directory (default: separate cache per connection under ~/.cache/network-dashboard)')
     parser.add_argument('--origin', default=ORIGIN)
     parser.add_argument('--port', type=int, default=18782)
     args = parser.parse_args(argv)

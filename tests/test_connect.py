@@ -160,3 +160,42 @@ def test_rejects_ssh_option_injection(tmp_path, host):
     from network_dashboard.remote import RemoteStudy
     with pytest.raises(ValueError, match='SSH'):
         RemoteStudy(host, Path('/study'), Path('/index'), tmp_path)
+
+
+def test_correcting_hostname_uses_separate_default_cache_without_deleting_old_files(tmp_path, monkeypatch):
+    from network_dashboard.remote import RemoteStudy
+    monkeypatch.setattr(Path, 'home', classmethod(lambda cls: tmp_path))
+    legacy = tmp_path / '.cache/network-dashboard'
+    old = RemoteStudy('logben@ogin.sherlock.stanford.edu', Path('/study'), Path('/index'), legacy)
+    (old.cache / 'keep.txt').write_text('cached bytes')
+    corrected = RemoteStudy('logben@login.sherlock.stanford.edu', Path('/study'), Path('/index'))
+    assert corrected.cache != legacy
+    assert corrected.cache.parent == legacy
+    assert (legacy / 'keep.txt').read_text() == 'cached bytes'
+    assert json.loads((legacy / 'source.json').read_text())['ssh'] == 'logben@ogin.sherlock.stanford.edu'
+    assert RemoteStudy('logben@login.sherlock.stanford.edu', Path('/study'), Path('/index')).cache == corrected.cache
+
+
+def test_existing_matching_default_cache_is_reused(tmp_path, monkeypatch):
+    from network_dashboard.remote import RemoteStudy
+    monkeypatch.setattr(Path, 'home', classmethod(lambda cls: tmp_path))
+    legacy = tmp_path / '.cache/network-dashboard'
+    RemoteStudy('sherlock', Path('/study'), Path('/index'), legacy)
+    assert RemoteStudy('sherlock', Path('/study'), Path('/index')).cache == legacy
+
+
+def test_default_caches_isolate_accounts_studies_and_indexes(tmp_path, monkeypatch):
+    from network_dashboard.remote import RemoteStudy
+    monkeypatch.setattr(Path, 'home', classmethod(lambda cls: tmp_path))
+    variants = [('user@host','/study','/index'),('other@host','/study','/index'),
+                ('user@host','/other','/index'),('user@host','/study','/other-index')]
+    caches = {RemoteStudy(host,Path(study),Path(index)).cache for host,study,index in variants}
+    assert len(caches) == len(variants)
+
+
+def test_explicit_cache_cannot_be_reassigned(tmp_path):
+    from network_dashboard.remote import RemoteStudy
+    RemoteStudy('old@host', Path('/study'), Path('/index'), tmp_path)
+    with pytest.raises(ValueError, match='different'):
+        RemoteStudy('new@host', Path('/study'), Path('/index'), tmp_path)
+    assert json.loads((tmp_path/'source.json').read_text())['ssh'] == 'old@host'
