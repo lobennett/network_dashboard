@@ -24,7 +24,8 @@ The interface separates preprocessing decisions from analysis exclusions and
 surface approvals. NiiVue opens registered images with verified content hashes;
 anatomical previews require defacing evidence. Missing annex content must be
 retrieved by the operator with DataLad. Older files may have unrecorded ancestry.
-Surface acceptance criteria await the lab's review protocol.
+Surface review uses ITK-SNAP ribbon overlays and Freeview white/pial mesh checks.
+Corrections require reconstruction, repeat inspection, and a new content-bound approval.
 
 This implementation is under development. Keep study data and indexes off GitHub
 and public hosting.

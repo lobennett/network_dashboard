@@ -53,7 +53,7 @@ export const stages = [
     title: "FreeSurfer 8.2.0",
     caption: "Reconstruct & review",
     description:
-      "Planned version: FreeSurfer 8.2.0. Run the reconstruction separately, then inspect and approve the surfaces. Surface approval is required before fMRIPrep uses this reconstruction.",
+      "Planned version: FreeSurfer 8.2.0. Inspect ribbon.mgz over norm.mgz in ITK-SNAP, then check white and pial meshes in Freeview. Corrections require reconstruction and repeat review; editing the ribbon alone does not update surfaces. Approve the final reconstruction before fMRIPrep.",
   },
   {
     id: "fmriprep",
