@@ -10,13 +10,14 @@ import { ScanInspector } from "./inspector";
 import { initialScan, subjectSummary, reviewControls } from "./review-layout";
 import { pipelineGuide } from "./pipeline-guide";
 import { renderCoverage, type Coverage, type CoverageScan } from "./coverage";
+import { completionChecklist, type Completion } from "./completion";
 
 const app = document.querySelector<HTMLDivElement>("#app")!;
 app.innerHTML = `<a class="skip-link" href="#review-page">Skip to content</a>
 <header><a class="brand" href="#review">Network<span>Data review</span></a><nav class="page-nav" aria-label="Pages"><a href="#review">Review data</a><a href="#coverage">Data completeness</a><a href="#pipeline">Pipeline guide</a></nav><span id="freshness" role="status">Snapshot not loaded</span></header>
 <div class="workspace" id="review-page"><aside><h2>Subjects</h2><nav id="subjects" aria-label="Subjects"></nav><p class="aside-note">Read-only review<br>Recorded in DataLad</p><a class="aside-help" href="/connect.html">Connection help</a></aside>
 <main><div id="notice" role="alert"></div><div class="subject-heading"><div><h1 id="subject-title">Review data</h1><p class="subject-caption">Inspect outputs and understand which runs to use.</p></div><details class="download-menu"><summary>Download records</summary><div id="manifest-downloads" class="manifest-downloads"></div></details></div>
-<div id="subject-summary"></div><div id="workflow"></div><div id="stage-detail"></div><div id="source-content"></div>
+<div id="subject-summary"></div><div id="subject-completion"></div><div id="workflow"></div><div id="stage-detail"></div><div id="source-content"></div>
 <section class="review-workspace" aria-label="Scan review"><div class="scan-section"><div class="scan-section-heading"><h2>Scans</h2><span id="scan-counts" class="muted"></span></div><div id="scan-list"></div></div><article id="inspector" aria-label="Selected scan"></article></section>
 </main></div><main id="pipeline-page" hidden></main><main id="coverage-page" hidden></main>`;
 const find = <T extends HTMLElement = HTMLElement>(id: string) =>
@@ -87,6 +88,7 @@ async function chooseSubject(subject: string) {
   find("scan-counts").textContent = "";
   find("notice").textContent = "";
   find("manifest-downloads").replaceChildren();
+  find("subject-completion").replaceChildren();
   document
     .querySelectorAll<HTMLButtonElement>("#subjects button")
     .forEach((b) =>
@@ -98,6 +100,23 @@ async function chooseSubject(subject: string) {
     data = value;
     selectedScan = initialScan(value);
     find("subject-summary").replaceChildren(subjectSummary(value));
+    void get<Completion>(`subjects/${encodeURIComponent(subject)}/completion`)
+      .then((checklist) => {
+        if (current === request)
+          find("subject-completion").replaceChildren(
+            completionChecklist(checklist, chooseStage),
+          );
+      })
+      .catch((error) => {
+        if (current === request)
+          find("subject-completion").replaceChildren(
+            element(
+              "p",
+              `Checklist unavailable: ${error}. Restart with the current connector version.`,
+              "gap",
+            ),
+          );
+      });
     const downloads = find("manifest-downloads");
     downloads.replaceChildren();
     for (const [format, label] of [

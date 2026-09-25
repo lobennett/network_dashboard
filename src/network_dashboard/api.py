@@ -81,6 +81,14 @@ def create_app(index: Path, study: Path, web: Path | None = None, *, allowed_ori
                     "decisions": rows(db, "SELECT d.* FROM decisions d JOIN entities e ON e.entity_key=d.entity_key WHERE e.subject=?", (subject,)),
                     "findings": rows(db, "SELECT f.* FROM findings f JOIN entities e ON e.entity_key=f.entity_key WHERE e.subject=?", (subject,))}
 
+    @app.get('/api/subjects/{subject}/completion')
+    def completion(subject: str):
+        from network_dashboard.completion import subject_completion
+        if not re.fullmatch(r'[A-Za-z0-9]+', subject):
+            raise HTTPException(404, 'Unknown subject')
+        with connect(index) as db:
+            return subject_completion(db, subject)
+
     @app.get("/api/artifacts")
     def artifacts(q: str = "", limit: int = Query(200, ge=1, le=1000), preview: bool = False,
                   subject: str | None = None,
