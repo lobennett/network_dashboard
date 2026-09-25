@@ -76,7 +76,7 @@ def create_app(index: Path, study: Path, web: Path | None = None, *, allowed_ori
     @app.get("/api/artifacts")
     def artifacts(q: str = "", limit: int = Query(200, ge=1, le=1000), preview: bool = False,
                   subject: str | None = None,
-                  dataset_stage: Literal['freesurfer', 'fmriprep'] | None = None,
+                  dataset_stage: Literal['freesurfer', 'fmriprep', 'fmriprepviz'] | None = None,
                   include_subject_report: bool = False):
         with connect(index) as db:
             if subject is not None and not re.fullmatch(r'[A-Za-z0-9]+', subject):
@@ -101,6 +101,8 @@ def create_app(index: Path, study: Path, web: Path | None = None, *, allowed_ori
                     name = root.name.lower()
                     if dataset_stage == 'freesurfer':
                         return name.startswith('freesurfer-8.')
+                    if dataset_stage == 'fmriprepviz':
+                        return name.startswith('fmriprepviz-')
                     return name.startswith('fmriprep-') and '+anat+' not in name
                 found = [item for item in found if matches_stage(item)]
             if preview:

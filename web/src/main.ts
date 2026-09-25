@@ -66,9 +66,9 @@ function chooseStage(stage: Stage) {
     );
   document
     .querySelector(".review-workspace")!
-    .classList.toggle("subject-outputs", stage === "surfaces");
+    .classList.toggle("subject-outputs", stage === "surfaces" || stage === "registration");
   const selection =
-    stage === "surfaces" ? data.entities.find((e) => e.subject) : selectedScan;
+    stage === "surfaces" || stage === "registration" ? data.entities.find((e) => e.subject) : selectedScan;
   if (selection) void inspector.show(data, selection, stage);
   else inspector.clear();
 }

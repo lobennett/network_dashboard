@@ -201,12 +201,24 @@ export const guideSteps: Step[] = [
       "Preprocessed BOLD, surface/CIFTI time series, confounds and reports.",
   },
   {
+    id: "registration",
+    title: "fmriprepviz 0.1.0",
+    caption: "Final automated step",
+    x: 390,
+    y: 940,
+    stage: "registration",
+    tool: "fmriprepviz · DataLad",
+    input: "Merged T1w-space BOLD references and the approved FreeSurfer ribbon.",
+    action: "Render the same anatomical cuts with white and pial contours across scans and sessions. Save a GIF, interactive HTML viewer, logs and input checksums without changing the preprocessing outputs.",
+    output: "One registration flipbook per subject, ready for final manual review.",
+  },
+  {
     id: "outputs",
     title: "Reviewable derivatives",
     caption: "Outputs, decisions and provenance",
     x: 390,
-    y: 940,
-    stage: "fmriprep",
+    y: 1070,
+    stage: "registration",
     tool: "DataLad · Network dashboard",
     input: "Merged preprocessing outputs and processing records.",
     action:
@@ -229,7 +241,8 @@ const connections = [
   ["fs", "surface-gate", "M840 640 V680"],
   ["scan-gate", "fmriprep", "M260 770 V790 H550 V810"],
   ["surface-gate", "fmriprep", "M840 770 V790 H550 V810"],
-  ["fmriprep", "outputs", "M550 900 V940"],
+  ["fmriprep", "registration", "M550 900 V940"],
+  ["registration", "outputs", "M550 1030 V1070"],
 ];
 export function pipelineGuide(openStage: (stage: Stage) => void): HTMLElement {
   const page = element("div", "", "pipeline-guide");
@@ -254,7 +267,7 @@ export function pipelineGuide(openStage: (stage: Stage) => void): HTMLElement {
   detail.setAttribute("aria-label", "Selected pipeline step");
   const ns = "http://www.w3.org/2000/svg";
   const svg = document.createElementNS(ns, "svg");
-  svg.setAttribute("viewBox", "0 0 1100 1060");
+  svg.setAttribute("viewBox", "0 0 1100 1190");
   svg.setAttribute("role", "group");
   svg.setAttribute(
     "aria-label",

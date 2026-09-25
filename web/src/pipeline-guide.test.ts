@@ -30,3 +30,9 @@ it("supports keyboard inspection and navigation to the corresponding review stag
   page.querySelector<HTMLButtonElement>(".guide-detail button")!.click();
   expect(navigate).toHaveBeenCalledWith("surfaces");
 });
+it("runs registration visualization after preprocessing and before final review", () => {
+  const page = pipelineGuide(vi.fn());
+  expect(page.querySelector('[data-from="fmriprep"][data-to="registration"]')).not.toBeNull();
+  expect(page.querySelector('[data-from="registration"][data-to="outputs"]')).not.toBeNull();
+  expect(page.textContent).toContain("fmriprepviz 0.1.0");
+});

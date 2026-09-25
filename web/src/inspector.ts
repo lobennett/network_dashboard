@@ -45,10 +45,12 @@ export class ScanInspector {
   async show(data: Subject, scan: RecordRow, stage: Stage) {
     this.clear();
     const generation = this.generation;
-    const subjectOutputs = stage === "surfaces";
+    const subjectOutputs = stage === "surfaces" || stage === "registration";
     const scanQuery = `q=${encodeURIComponent(scanPrefix(scan) + "_")}`;
     const query =
-      stage === "surfaces"
+      stage === "registration"
+        ? `subject=${encodeURIComponent(String(scan.subject))}&dataset_stage=fmriprepviz`
+        : stage === "surfaces"
         ? `subject=${encodeURIComponent(String(scan.subject))}&dataset_stage=freesurfer`
         : stage === "fmriprep"
           ? `${scanQuery}&subject=${encodeURIComponent(String(scan.subject))}&dataset_stage=fmriprep&include_subject_report=true`
@@ -67,7 +69,9 @@ export class ScanInspector {
       ),
       element(
         "h2",
-        subjectOutputs
+        stage === "registration"
+          ? "Registration review"
+          : subjectOutputs
           ? "Surfaces & reconstruction"
           : String(scan.task ?? scan.suffix),
       ),
@@ -188,7 +192,7 @@ export class ScanInspector {
         const choices = element("div", "", "preview-choices");
         const display = element("div", "", "preview-display");
         content.replaceChildren(choices, display);
-        choices.classList.toggle("surface-controls", subjectOutputs);
+        choices.classList.toggle("surface-controls", stage === "surfaces");
         const unique = [
           ...new Map(
             available.map((f) => [`${f.path}/${f.content_id}`, f]),
@@ -199,7 +203,7 @@ export class ScanInspector {
             Number(b.path.includes("echo-2")) -
             Number(a.path.includes("echo-2")),
         );
-        if (subjectOutputs) {
+        if (stage === "surfaces") {
           for (const norm of unique.filter((f) =>
             f.path.endsWith("/mri/norm.mgz"),
           )) {
@@ -221,7 +225,7 @@ export class ScanInspector {
             }
           }
         }
-        if (subjectOutputs) {
+        if (stage === "surfaces") {
           for (const group of [
             "Anatomy",
             "Segmentations",
@@ -263,7 +267,7 @@ export class ScanInspector {
             choices.append(block);
           }
         }
-        if (!subjectOutputs && unique.length) {
+        if (stage !== "surfaces" && unique.length) {
           const picker = element("select");
           picker.setAttribute("aria-label", "Image or report");
           unique.forEach((file, index) => {
@@ -316,7 +320,9 @@ export class ScanInspector {
           display.append(
             element(
               "p",
-              "Choose an image or report above. In NiiVue, scroll to move through slices; drag to adjust the view.",
+              stage === "registration"
+                ? "Open the registration report. Use the frame slider or arrow keys to compare BOLD alignment across scans and sessions."
+                : "Choose an image or report above. In NiiVue, scroll to move through slices; drag to adjust the view.",
               "muted",
             ),
           );

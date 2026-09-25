@@ -62,6 +62,13 @@ export const stages = [
     description:
       "Planned version: fMRIPrep 25.2.5. Preprocess retained scans using the approved FreeSurfer subjects directory, then inspect the final outputs.",
   },
+  {
+    id: "registration",
+    title: "Registration review",
+    caption: "fmriprepviz 0.1.0",
+    description:
+      "After fMRIPrep merges, fmriprepviz overlays the approved FreeSurfer ribbon on each T1w-space BOLD reference. Inspect the subject's interactive flipbook for misregistration across scans and sessions. Outputs and input checksums are saved in DataLad; this does not approve scans for analysis.",
+  },
 ] as const;
 export type Stage = (typeof stages)[number]["id"];
 const milestoneStages: Record<string, Stage | "legacy"> = {
@@ -91,6 +98,7 @@ const milestoneStages: Record<string, Stage | "legacy"> = {
   anatomical: "legacy",
   fmriprep: "fmriprep",
   "fmriprep-complete": "fmriprep",
+  fmriprepviz: "registration",
 };
 export function stageFor(name: string): Stage | "legacy" | "other" {
   return milestoneStages[name] ?? "other";
@@ -132,6 +140,7 @@ export function stageStatus(stage: Stage, attempts: RecordRow[]): string {
     review: "scan-decisions-approved",
     surfaces: "surface-review-approved",
     fmriprep: "fmriprep-complete",
+    registration: "fmriprepviz",
   };
   if (successful(completions[stage] ?? stage))
     return stage === "review" || stage === "surfaces" ? "Approved" : "Complete";

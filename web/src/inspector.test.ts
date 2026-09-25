@@ -119,3 +119,12 @@ it("offers fetching registered Oak images without treating blocked anatomy as fe
     "downloads from Oak",
   );
 });
+it("offers the subject registration viewer without surface controls", async () => {
+  vi.mocked(get).mockResolvedValue([{id:"qc", path:"sub-s03/sub-s03_desc-registration.html", preview_available:true}]);
+  const panel = document.querySelector("article")!;
+  await new ScanInspector(panel).show(data, scan, "registration");
+  await vi.waitFor(() => expect(panel.querySelector(".primary")).not.toBeNull());
+  expect(panel.querySelector("h2")!.textContent).toBe("Registration review");
+  expect(panel.querySelector(".surface-group")).toBeNull();
+  expect(vi.mocked(get).mock.calls[0][0]).toContain("dataset_stage=fmriprepviz");
+});

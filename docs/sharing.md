@@ -33,7 +33,7 @@ index. The index is a snapshot, not a live scheduler feed.
 ```bash
 uv build --wheel
 mkdir -p web/public/downloads
-cp dist/network_dashboard-0.4.1-py3-none-any.whl web/public/downloads/
+cp dist/network_dashboard-0.4.2-py3-none-any.whl web/public/downloads/
 vercel --prod
 ```
 

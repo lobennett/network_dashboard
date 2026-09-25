@@ -243,3 +243,14 @@ def test_table_preview_checks_bytes_and_original_artifact_name(study):
     path.write_text('changed')
     assert client(study).get('/api/artifacts/events/table').status_code == 409
     assert client(study).get('/api/artifacts/report/table').status_code == 400
+
+
+def test_registration_viewer_is_subject_scoped_and_separate_from_preprocessing(study):
+    with sqlite3.connect(study[1]) as db:
+        db.execute("INSERT INTO artifacts VALUES (2,'derivatives/fmriprepviz-0.1.0-pilot','dataset:viz','dataset',NULL)")
+        db.executemany('INSERT INTO artifact_versions VALUES (?,?,?,?,?)', [
+            ('viewer','viz','sub-s03/sub-s03_desc-registration.html','sha256:missing','{}'),
+            ('neighbor','viz','sub-s030/sub-s030_desc-registration.html','sha256:missing','{}')])
+    result = client(study).get('/api/artifacts?subject=s03&dataset_stage=fmriprepviz').json()
+    assert [r['id'] for r in result] == ['viewer']
+    assert client(study).get('/api/artifacts?subject=s03&dataset_stage=fmriprep').json() == []
