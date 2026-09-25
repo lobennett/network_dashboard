@@ -13,6 +13,7 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 from starlette.middleware.cors import CORSMiddleware
 
 from network_dashboard.artifacts import content_path
+from network_dashboard.checksums import verifiable
 from network_dashboard.records import connect, rows, dataset_roots
 
 
@@ -113,7 +114,8 @@ def create_app(index: Path, study: Path, web: Path | None = None, *, allowed_ori
                         item['preview_available'] = True
                     except HTTPException as error:
                         item.update(preview_available=False, preview_reason=error.detail,
-                                    fetch_available=bool(fetcher and error.status_code in {404, 409}))
+                                    fetch_available=bool(fetcher and error.status_code in {404, 409}
+                                                         and verifiable(item['content_id'])))
             return found
 
     def get_artifact(db, identity):
@@ -136,6 +138,12 @@ def create_app(index: Path, study: Path, web: Path | None = None, *, allowed_ori
                     attempts.append(json.loads(row[0]))
             return {"artifact": selected, "artifacts": artifacts, "links": links, "attempts": attempts,
                     "ancestry": "recorded" if any(link["output"] == identity for link in links) else "unrecorded"}
+
+    @app.get("/api/artifacts/{identity}/tree")
+    def tree(identity: str):
+        from network_dashboard.provenance import ancestry_tree
+        with connect(index) as db:
+            return ancestry_tree(db, identity)
 
     @app.get("/api/attempts/{identity}")
     def attempt(identity: str):

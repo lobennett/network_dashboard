@@ -4,6 +4,7 @@ import { element, details, type RecordRow } from "./review";
 import { scanPrefix } from "./scans";
 import { reviewMetrics, humanize, type Subject, type Stage } from "./pipeline";
 import { viewFile } from "./viewer";
+import { provenanceTree, type Provenance } from './provenance';
 type Artifact = {
   id: string;
   path: string;
@@ -359,6 +360,19 @@ export class ScanInspector {
         element("h3", "File provenance"),
         details(data.artifact),
       );
+      const tree = element('button', 'Show provenance tree', 'primary');
+      const treePanel = element('div');
+      tree.onclick = async () => {
+        tree.disabled = true;
+        try {
+          const history = await get<Provenance>(`artifacts/${id}/tree`);
+          if (generation === this.generation && load === this.load)
+            treePanel.replaceChildren(provenanceTree(history));
+        } catch (error) {
+          treePanel.replaceChildren(element('p', String(error), 'gap'));
+        } finally { tree.disabled = false; }
+      };
+      display.append(tree, treePanel);
       if (/\.(json|tsv|txt|log|html)$/.test(data.artifact.path)) {
         const open = element("button", "Open recorded file");
         open.onclick = () => void openRecordedFile(id, data.artifact.path);

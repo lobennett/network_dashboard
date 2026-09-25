@@ -13,6 +13,7 @@ from fastapi import HTTPException
 
 from .artifacts import content_path
 from .records import connect, dataset_roots
+from .checksums import matches, verifiable
 
 OAK = '/oak/stanford/groups/russpold/data/network_grant'
 DEFAULT_STUDY = OAK + '/network-study-pilot-s03'
@@ -60,9 +61,7 @@ class RemoteStudy:
                             stdout=stream, stderr=subprocess.PIPE, check=True, timeout=600)
                 stream.flush()
                 if digest:
-                    with temporary.open('rb') as data:
-                        actual = 'sha256:' + hashlib.file_digest(data, 'sha256').hexdigest()
-                    if actual != digest:
+                    if not matches(temporary, digest):
                         raise HTTPException(409, 'Oak content differs from this indexed version; refresh the index')
                 os.replace(temporary, target)
             except (OSError, subprocess.SubprocessError) as error:
@@ -114,7 +113,7 @@ class RemoteStudy:
             relative = target.relative_to(self.study)
             if not target.resolve().is_relative_to(self.study.resolve()):
                 raise HTTPException(403, 'Cache path leaves the study')
-            if not re.fullmatch(r'sha256:[a-f0-9]{64}', artifact['content_id']):
+            if not verifiable(artifact['content_id']):
                 raise HTTPException(409, 'Artifact has no verifiable content checksum')
             self._download(self.source / relative, target, artifact['content_id'])
             return content_path(db, self.study, artifact)

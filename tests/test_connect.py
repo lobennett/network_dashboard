@@ -51,6 +51,27 @@ def test_failed_checksum_leaves_no_cached_file(study, tmp_path):
     assert not (remote.study / 'report.html').exists()
 
 
+def test_remote_fetch_verifies_annex_md5_and_rejects_pointer_identity(study, tmp_path):
+    from network_dashboard.remote import RemoteStudy
+    from network_dashboard.api import create_app
+    root, index = study
+    digest = hashlib.md5((root / 'report.html').read_bytes()).hexdigest()
+    with sqlite3.connect(index) as db:
+        db.execute('UPDATE artifact_versions SET content_id=?', ('md5:' + digest,))
+        db.execute('INSERT INTO artifact_versions VALUES (?,?,?,?,?)',
+                   ('pointer', 'study', 'sub-s03_echo-1_bold.nii.gz', 'gitblob:' + 'a'*40, '{}'))
+    remote = RemoteStudy('user@host', root, index, tmp_path / 'cache', runner=transport(tmp_path))
+    remote.prepare()
+    api = TestClient(create_app(remote.index, remote.study, fetcher=remote.fetch))
+    assert api.get('/api/artifacts/report/content').status_code == 200
+    pointer = api.get('/api/artifacts?q=echo-1&preview=true').json()[0]
+    assert pointer['fetch_available'] is False
+    (remote.study / 'report.html').unlink()
+    (root / 'report.html').write_text('different bytes')
+    assert api.get('/api/artifacts/report/content').status_code == 409
+    assert not (remote.study / 'report.html').exists()
+
+
 def test_anatomy_without_defacing_receipt_is_never_fetched(study, tmp_path):
     from network_dashboard.remote import RemoteStudy
     root, index = study

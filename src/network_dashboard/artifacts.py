@@ -1,5 +1,4 @@
 """Serve registered file versions, enforcing content and anatomical privacy."""
-import hashlib
 import json
 import re
 from pathlib import Path
@@ -8,6 +7,7 @@ import subprocess
 from fastapi import HTTPException
 
 from network_dashboard.records import dataset_roots
+from network_dashboard.checksums import matches
 
 
 def content_path(db, study: Path, artifact: dict) -> Path:
@@ -41,9 +41,7 @@ def content_path(db, study: Path, artifact: dict) -> Path:
             raise HTTPException(403, "File link leaves its registered dataset")
     if not target.is_file():
         raise HTTPException(404, "Content is unavailable locally; retrieve it with DataLad")
-    with target.open("rb") as stream:
-        identity = "sha256:" + hashlib.file_digest(stream, "sha256").hexdigest()
-    if identity != artifact["content_id"]:
+    if not matches(target, artifact["content_id"]):
         raise HTTPException(409, "Local content differs from this recorded file version")
     return target
 

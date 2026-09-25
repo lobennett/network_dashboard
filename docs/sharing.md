@@ -10,7 +10,7 @@ The service binds to localhost and permits only the configured HTTPS frontend.
 `/oak/stanford/groups/russpold/data/network_grant/network-dashboard-cache/records.sqlite`.
 Override these with `--study` and `--index`. `--cache` selects the local cache directory.
 Restart to refresh the snapshot. Missing files are fetched on click and checked
-against indexed SHA256 hashes. A first MRIQC report may download its result ZIP.
+against indexed SHA256 or legacy git-annex MD5 checksums. A first MRIQC report may download its result ZIP.
 
 DataLad provenance stays on Sherlock. Original DICOMs/P-files stay on Flywheel;
 the index records their identities and conversion receipts. FreeSurfer **8.2.0**
@@ -32,7 +32,7 @@ index. The index is a snapshot, not a live scheduler feed.
 ```bash
 uv build --wheel
 mkdir -p web/public/downloads
-cp dist/network_dashboard-0.2.0-py3-none-any.whl web/public/downloads/
+cp dist/network_dashboard-0.3.1-py3-none-any.whl web/public/downloads/
 vercel --prod
 ```
 

@@ -14,6 +14,11 @@
 * {
   box-sizing: border-box;
 }
+.provenance-tree { overflow-wrap: anywhere; }
+.provenance-tree details { margin: 12px 0; padding-left: 12px; border-left: 2px solid var(--rule); }
+.provenance-tree summary { cursor: pointer; color: var(--cardinal); font-weight: 600; }
+.provenance-tree code { display: block; font-size: 11px; color: var(--muted); margin-top: 8px; }
+.provenance-transform { margin: 12px 0 12px 8px; padding: 12px; background: var(--wash); }
 body {
   margin: 0;
 }
