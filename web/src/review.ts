@@ -1,3 +1,4 @@
+import { label } from "./labels";
 export type RecordRow = Record<string, unknown>;
 
 export function element<K extends keyof HTMLElementTagNameMap>(
@@ -16,12 +17,27 @@ export function details(row: RecordRow): HTMLElement {
   for (const [key, value] of Object.entries(row)) {
     if (value == null || value === "") continue;
     block.append(
-      element("dt", key.replaceAll("_", " ")),
+      element("dt", label(key)),
       element(
         "dd",
         typeof value === "object"
           ? JSON.stringify(value, null, 2)
-          : String(value),
+          : [
+                "state",
+                "status",
+                "decision",
+                "approved",
+                "approval_required",
+                "behavioral_status",
+                "event_status",
+                "scope",
+                "flags",
+                "reason_code",
+                "finding_type",
+                "severity",
+              ].includes(key)
+            ? label(value)
+            : String(value),
       ),
     );
   }
@@ -35,8 +51,8 @@ export function renderDecisions(rows: RecordRow[]): HTMLElement {
   for (const row of rows) {
     const card = element("article", "", "decision");
     card.append(
-      element("span", String(row.decision ?? "Review pending"), "badge"),
-      element("h3", String(row.scope)),
+      element("span", label(row.decision ?? "Review pending"), "badge"),
+      element("h3", label(row.scope)),
       details(row),
     );
     panel.append(card);
@@ -52,8 +68,8 @@ export function renderAttempts(rows: RecordRow[]): HTMLElement {
     const item = element("details", "", "attempt");
     const heading = element("summary");
     heading.append(
-      element("span", String(row.stage)),
-      element("span", String(row.state), "badge"),
+      element("span", label(row.stage)),
+      element("span", label(row.state), "badge"),
     );
     item.append(heading, details(row));
     panel.append(item);

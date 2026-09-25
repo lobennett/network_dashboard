@@ -44,3 +44,19 @@ it("shows real scan metrics and keeps analysis exclusions separate from processi
     expect.objectContaining({ task: "stopSignal", session: "11" }),
   );
 });
+it("selects a scan from its whole row and with the keyboard", () => {
+  const select=vi.fn();
+  const scan={entity_key:"f",namespace:"raw",subject:"s03",session:"01",run:"1",datatype:"fmap",suffix:"fieldmap"};
+  const panel=renderScans({entities:[scan],findings:[],decisions:[]},select);
+  panel.querySelector("tbody td:last-child")!.dispatchEvent(new MouseEvent("click",{bubbles:true}));
+  expect(select).toHaveBeenCalledTimes(1);
+  panel.querySelector("tbody tr")!.dispatchEvent(new KeyboardEvent("keydown",{key:"Enter",bubbles:true}));
+  expect(select).toHaveBeenCalledTimes(2);
+});
+it("matches a Flywheel fieldmap prefix exactly without selecting anatomy", async () => {
+  const {scanForDestination}=await import("./scans");
+  const scans=[{subject:"s03",session:"01",run:"1",datatype:"anat",suffix:"T1w"},
+    {subject:"s03",session:"01",run:"1",datatype:"fmap",suffix:"fieldmap"}];
+  expect(scanForDestination(scans,"sub-s03/ses-01/fmap/sub-s03_ses-01_run-1")).toBe(scans[1]);
+  expect(scanForDestination(scans,"sub-s03/ses-01/fmap/sub-s03_ses-01_run-10")).toBeUndefined();
+});

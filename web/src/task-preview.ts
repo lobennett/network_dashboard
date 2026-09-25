@@ -1,6 +1,73 @@
 import { get, apiUrl } from "./api";
 import { element } from "./review";
 
+export type BehaviorSummary = {
+  test_trials: number;
+  accuracy_denominator: number;
+  choice_accuracy: number | null;
+  response_time_denominator: number;
+  median_response_time_s: number | null;
+  no_keypress_trials: number;
+  go_omissions: number;
+  basis: string;
+  by_condition: Record<string, Omit<BehaviorSummary, "basis" | "by_condition">>;
+};
+export function behaviorSummary(metrics: BehaviorSummary): HTMLElement {
+  const panel = element("section", "", "behavior-summary");
+  panel.append(
+    element("h3", "Behavioral metrics"),
+    element("p", metrics.basis, "muted"),
+  );
+  if (!metrics.test_trials) {
+    panel.append(
+      element(
+        "p",
+        "No test_trial rows are recorded; behavioral metrics are unavailable.",
+      ),
+    );
+    return panel;
+  }
+  const table = element("table"),
+    head = element("thead"),
+    row = element("tr"),
+    body = element("tbody");
+  for (const title of [
+    "Condition",
+    "Test trials",
+    "Recorded accuracy",
+    "Median response time",
+    "No keypress",
+    "Go omissions",
+  ])
+    row.append(element("th", title));
+  head.append(row);
+  table.append(head, body);
+  for (const [name, m] of [
+    ["All test trials", metrics],
+    ...Object.entries(metrics.by_condition),
+  ] as const) {
+    const tr = element("tr");
+    for (const value of [
+      name,
+      String(m.test_trials),
+      m.choice_accuracy === null
+        ? "Unavailable"
+        : `${(m.choice_accuracy * 100).toFixed(1)}% (n=${m.accuracy_denominator})`,
+      m.median_response_time_s === null
+        ? "Unavailable"
+        : `${m.median_response_time_s.toFixed(3)} s (n=${m.response_time_denominator})`,
+      String(m.no_keypress_trials),
+      String(m.go_omissions),
+    ])
+      tr.append(element("td", value));
+    body.append(tr);
+  }
+  const scroll = element("div", "", "scan-table");
+  scroll.append(table);
+  panel.append(scroll);
+  return panel;
+}
+
 type Table = {
   kind: string;
   columns: string[];
@@ -9,6 +76,7 @@ type Table = {
   total_columns: number;
   truncated: boolean;
   nonmonotonic_pairs: number | null;
+  behavior?: BehaviorSummary;
 };
 type File = {
   id: string;
@@ -265,6 +333,7 @@ export async function taskPreview(
         download.target = "_blank";
         download.rel = "noopener";
         display.append(download);
+        if (table.behavior) display.append(behaviorSummary(table.behavior));
         if (table.truncated)
           display.append(
             element(

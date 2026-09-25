@@ -2,22 +2,23 @@ import "./styles.css";
 import "./layout.css";
 import { get, apiUrl } from "./api";
 import { element, type RecordRow } from "./review";
-import { renderScans, scanPrefix } from "./scans";
+import { renderScans, scanForDestination } from "./scans";
 import { flywheelInventory } from "./flywheel";
 import { stageDetail } from "./workflow";
 import { rawScans, scanOutcome, type Subject, type Stage } from "./pipeline";
 import { ScanInspector } from "./inspector";
 import { initialScan, subjectSummary, reviewControls } from "./review-layout";
 import { pipelineGuide } from "./pipeline-guide";
+import { renderCoverage, type Coverage, type CoverageScan } from "./coverage";
 
 const app = document.querySelector<HTMLDivElement>("#app")!;
 app.innerHTML = `<a class="skip-link" href="#review-page">Skip to content</a>
-<header><a class="brand" href="#review">Network<span>Data review</span></a><nav class="page-nav" aria-label="Pages"><a href="#review">Review data</a><a href="#pipeline">Pipeline guide</a></nav><span id="freshness" role="status">Snapshot not loaded</span></header>
+<header><a class="brand" href="#review">Network<span>Data review</span></a><nav class="page-nav" aria-label="Pages"><a href="#review">Review data</a><a href="#coverage">Data completeness</a><a href="#pipeline">Pipeline guide</a></nav><span id="freshness" role="status">Snapshot not loaded</span></header>
 <div class="workspace" id="review-page"><aside><h2>Subjects</h2><nav id="subjects" aria-label="Subjects"></nav><p class="aside-note">Read-only review<br>Recorded in DataLad</p><a class="aside-help" href="/connect.html">Connection help</a></aside>
 <main><div id="notice" role="alert"></div><div class="subject-heading"><div><h1 id="subject-title">Review data</h1><p class="subject-caption">Inspect outputs and understand which runs to use.</p></div><details class="download-menu"><summary>Download records</summary><div id="manifest-downloads" class="manifest-downloads"></div></details></div>
 <div id="subject-summary"></div><div id="workflow"></div><div id="stage-detail"></div><div id="source-content"></div>
 <section class="review-workspace" aria-label="Scan review"><div class="scan-section"><div class="scan-section-heading"><h2>Scans</h2><span id="scan-counts" class="muted"></span></div><div id="scan-list"></div></div><article id="inspector" aria-label="Selected scan"></article></section>
-</main></div><main id="pipeline-page" hidden></main>`;
+</main></div><main id="pipeline-page" hidden></main><main id="coverage-page" hidden></main>`;
 const find = <T extends HTMLElement = HTMLElement>(id: string) =>
   document.getElementById(id) as T;
 const inspector = new ScanInspector(find("inspector"));
@@ -52,23 +53,26 @@ function chooseStage(stage: Stage) {
   if (stage === "source")
     find("source-content").append(
       flywheelInventory(data, (prefix) => {
-        const scan = rawScans(data!).find((s) =>
-          prefix.includes(scanPrefix(s) + "_"),
-        );
+        const scan = scanForDestination(rawScans(data!), prefix);
         if (scan) {
           selectedScan = scan;
           refreshScanList();
           chooseStage("bids");
         } else
           find("notice").textContent =
-            "This planned destination is not indexed as a BOLD/T1w/T2w scan in this snapshot.";
+            "This planned BIDS destination is not indexed as a scan in this snapshot.";
       }),
     );
   document
     .querySelector(".review-workspace")!
-    .classList.toggle("subject-outputs", stage === "surfaces" || stage === "registration");
+    .classList.toggle(
+      "subject-outputs",
+      stage === "surfaces" || stage === "registration",
+    );
   const selection =
-    stage === "surfaces" || stage === "registration" ? data.entities.find((e) => e.subject) : selectedScan;
+    stage === "surfaces" || stage === "registration"
+      ? data.entities.find((e) => e.subject)
+      : selectedScan;
   if (selection) void inspector.show(data, selection, stage);
   else inspector.clear();
 }
@@ -139,8 +143,10 @@ async function start() {
       button.onclick = () => void chooseSubject(subject);
       find("subjects").append(button);
     }
-    if (subjects.length) await chooseSubject(subjects[0].subject);
-    else
+    if (subjects.length) {
+      await chooseSubject(subjects[0].subject);
+      if (location.hash === "#coverage") await showCoverage();
+    } else
       find("notice").textContent =
         "No subjects indexed. Build records from the canonical study first.";
   } catch (error) {
@@ -185,22 +191,83 @@ find("pipeline-page").append(
     chooseStage(stage);
   }),
 );
+let coverageRequest = 0;
+async function showCoverage() {
+  const request = ++coverageRequest;
+  const host = find("coverage-page");
+  if (!data) {
+    const link = element("a", "Connect on Review data");
+    link.href = "#review";
+    host.replaceChildren(
+      element("h1", "Data completeness"),
+      element(
+        "p",
+        "Connect to the local study to inspect its recorded inventory.",
+      ),
+      link,
+    );
+    return;
+  }
+  host.replaceChildren(
+    element("p", "Comparing recorded scan expectations with tracked files…"),
+  );
+  try {
+    const inventory = await get<Coverage>("coverage");
+    if (request !== coverageRequest) return;
+    host.replaceChildren(
+      renderCoverage(
+        inventory,
+        async (scan: CoverageScan, analysis: boolean) => {
+          location.hash = "review";
+          await chooseSubject(scan.subject);
+          const found =
+            data &&
+            scanForDestination(
+              rawScans(data),
+              scan.prefix + "_" + String(scan.suffix),
+            );
+          if (found) {
+            selectedScan = found;
+            refreshScanList();
+            chooseStage(analysis ? "events" : "bids");
+          } else
+            find("notice").textContent =
+              "This expected scan has no indexed scan record. See Data completeness for its missing filenames.";
+        },
+      ),
+    );
+  } catch (error) {
+    if (request === coverageRequest)
+      host.replaceChildren(element("p", String(error), "gap"));
+  }
+}
 function route() {
+  const coverage = location.hash === "#coverage";
   const guide = location.hash === "#pipeline";
-  find("review-page").hidden = guide;
+  find("review-page").hidden = guide || coverage;
+  find("coverage-page").hidden = !coverage;
+  if (coverage) void showCoverage();
   find("pipeline-page").hidden = !guide;
-  document.title = guide ? "Pipeline guide · Network" : "Review data · Network";
+  document.title = guide
+    ? "Pipeline guide · Network"
+    : coverage
+      ? "Data completeness · Network"
+      : "Review data · Network";
   document
     .querySelectorAll<HTMLAnchorElement>(".page-nav a")
     .forEach((a) =>
       a.setAttribute(
         "aria-current",
-        a.hash === (guide ? "#pipeline" : "#review") ? "page" : "false",
+        a.hash === (guide ? "#pipeline" : coverage ? "#coverage" : "#review")
+          ? "page"
+          : "false",
       ),
     );
   document.querySelector<HTMLAnchorElement>(".skip-link")!.href = guide
     ? "#pipeline-page"
-    : "#review-page";
+    : coverage
+      ? "#coverage-page"
+      : "#review-page";
   window.scrollTo(0, 0);
 }
 window.addEventListener("hashchange", route);

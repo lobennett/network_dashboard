@@ -10,6 +10,13 @@ Use the dashboard's **Scan manifest (TSV)** for run-level decisions and **Proven
 
 ## Timing and exclusions
 
+**Data completeness** separates missing images/sidecars, missing behavior/events,
+and analysis exclusions. Its expectations come from recorded acquisitions,
+in-scanner behavior and review records, not a complete protocol schedule.
+Behavior metrics summarize canonical test trials by run and condition: recorded
+accuracy, positive response times, no keypress, and go omissions. Denominators
+are shown; these descriptive metrics do not create exclusion decisions.
+
 - The canonical BOLD data have the first seven volumes removed upstream. Canonical events use the trimmed scan's time origin. fMRIPrep is configured with `--dummy-scans 0`.
 - Consumers must **not trim BOLD or confounds again or shift canonical event onsets again**. Check the per-run TR, volume-discard sidecar, and equal BOLD/confound/design row counts.
 - Retention for fMRIPrep and exclusion from task models are separate decisions. The ses-11 `stopSignalWDirectedForgetting` run-1 is retained for preprocessing but excluded from task first-level models because of its timing failure. Retention does not certify suitability for every time-series method.

@@ -12,10 +12,10 @@ describe("review evidence", () => {
         reason: "nonmonotonic timing",
       },
     ]);
-    expect(element.textContent).toContain("preprocessing");
-    expect(element.textContent).toContain("keep");
-    expect(element.textContent).toContain("task_first_level");
-    expect(element.textContent).toContain("exclude");
+    expect(element.textContent).toContain("Preprocessing");
+    expect(element.textContent).toContain("Keep");
+    expect(element.textContent).toContain("First-level task models");
+    expect(element.textContent).toContain("Exclude");
     expect(element.textContent).toContain("nonmonotonic timing");
   });
   it("shows missing records without marking processing complete", () => {
@@ -33,4 +33,11 @@ describe("review evidence", () => {
     ]);
     expect(element.querySelector("img")).toBeNull();
   });
+});
+it("uses sentence case for labels while preserving metric acronyms and literal values", async () => {
+  const {details}=await import("./review");
+  const block=details({fd_mean:0.2,dvars_std:1.1,behavioral_status:"reviewed_exception",path:"sub-s03/ses-01/func"});
+  expect(Array.from(block.querySelectorAll("dt")).map(n=>n.textContent)).toEqual(["Mean FD","Standardized DVARS","Behavioral status","Path"]);
+  expect(block.textContent).toContain("Reviewed exception");
+  expect(block.textContent).toContain("sub-s03/ses-01/func");
 });

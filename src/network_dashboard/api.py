@@ -59,6 +59,14 @@ def create_app(index: Path, study: Path, web: Path | None = None, *, allowed_ori
         with connect(index) as db:
             return rows(db, "SELECT DISTINCT subject FROM entities WHERE subject IS NOT NULL ORDER BY subject")
 
+    @app.get('/api/coverage')
+    def coverage(subject: str | None = None):
+        if subject is not None and not re.fullmatch(r'[A-Za-z0-9]+', subject):
+            raise HTTPException(400, 'Invalid subject')
+        from network_dashboard.coverage import study_coverage
+        with connect(index) as db:
+            return study_coverage(db, subject)
+
     @app.get("/api/subjects/{subject}")
     def subject_detail(subject: str):
         if not re.fullmatch(r"[A-Za-z0-9]+", subject):

@@ -1,5 +1,6 @@
 import { element, details, type RecordRow } from "./review";
 import { type Subject } from "./pipeline";
+import { label } from "./labels";
 export function acquisitionRecords(data: Subject): RecordRow[] {
   return data.findings
     .filter((f) => f.finding_type === "flywheel-acquisition")
@@ -91,7 +92,7 @@ export function flywheelInventory(
         name,
         element(
           "td",
-          `${row.decision}: ${String(row.reason).replaceAll("_", " ")}`,
+          `${label(row.decision)}: ${label(row.reason)}`,
         ),
         destination,
       );

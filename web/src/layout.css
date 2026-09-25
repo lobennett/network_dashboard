@@ -383,3 +383,19 @@ header {
     flex: 1;
   }
 }
+.scan-table tbody tr[tabindex] { cursor: pointer; }
+.scan-table tbody tr[tabindex]:hover { background: #f7f2ef; }
+.scan-table tbody tr[tabindex]:focus-visible { outline: 2px solid #8c1515; outline-offset: -2px; }
+#coverage-page { max-width: 1440px; margin: 0 auto; padding: 30px; }
+.coverage-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin: 22px 0; }
+.coverage-controls label { display: flex; align-items: center; gap: 8px; }
+.coverage-controls input[type=checkbox] { width: auto; }
+.coverage-table td { vertical-align: top; min-width: 130px; }
+.coverage-table td:last-child { width: 160px; }
+.coverage-table td button { display: block; margin-bottom: 8px; }
+.coverage-table .record { font-size: .85rem; }
+.coverage-table .file-path { max-width: 430px; overflow-wrap: anywhere; white-space: normal; }
+.coverage-evidence:not(:empty) { margin-top: 24px; border-top: 3px solid #8c1515; padding-top: 20px; }
+.behavior-summary { margin: 20px 0; }
+.behavior-summary th, .behavior-summary td { padding: 10px; text-align: left; border-bottom: 1px solid #ddd; }
+@media(max-width:700px) { #coverage-page { padding: 18px; } .coverage-controls > input { width: 100%; } }

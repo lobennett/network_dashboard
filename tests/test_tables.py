@@ -32,3 +32,21 @@ def test_annex_target_uses_registered_name(tmp_path):
     path = tmp_path / 'SHA256E-s10--abc.csv'
     path.write_text('go,omission\n1,0\n')
     assert read_table(path, name='sub-s03_design_matrix.csv')['kind'] == 'design'
+
+
+def test_behavior_metrics_cover_all_test_trials_not_just_preview(tmp_path):
+    path=tmp_path/'run_events.tsv'
+    path.write_text('onset\tduration\ttrial_id\ttrial_type\tchoice_acc\tresponse_time\tkey_press\n'
+                    '0\t1\tpractice_trial\tgo\t0\t0.1\t-1\n'
+                    '1\t1\ttest_trial\tgo\t1\t0.4\t32\n'
+                    '2\t1\ttest_trial\tgo\t0\tn/a\t-1.0\n'
+                    '3\t1\ttest_trial\tnogo\t1\tn/a\t-1\n')
+    result=read_table(path,max_rows=1)
+    metrics=result['behavior']
+    assert metrics['test_trials']==3
+    assert metrics['accuracy_denominator']==3
+    assert metrics['choice_accuracy']==pytest.approx(2/3)
+    assert metrics['median_response_time_s']==0.4
+    assert metrics['go_omissions']==1
+    assert metrics['no_keypress_trials']==2
+    assert metrics['by_condition']['nogo']['choice_accuracy']==1

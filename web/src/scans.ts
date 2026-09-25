@@ -7,6 +7,23 @@ import {
   humanize,
 } from "./pipeline";
 type ScanData = Pick<Subject, "entities" | "findings" | "decisions">;
+export function scanForDestination(scans: RecordRow[], destination: string) {
+  const parts = destination.split("/");
+  const basename = parts.at(-1)!;
+  const datatype = parts.find((p) => ["func", "anat", "fmap"].includes(p));
+  const suffix = basename.split("_").at(-1);
+  return scans.find(
+    (scan) =>
+      (!["T1w", "T2w", "fieldmap", "magnitude"].includes(suffix ?? "") ||
+        scan.suffix === suffix) &&
+      (!datatype ||
+        scan.datatype === datatype ||
+        (datatype === "fmap" &&
+          ["fieldmap", "magnitude"].includes(String(scan.suffix)))) &&
+      (basename === scanPrefix(scan) ||
+        basename.startsWith(scanPrefix(scan) + "_")),
+  );
+}
 export function scanPrefix(scan: RecordRow): string {
   return [
     ["sub", scan.subject],
@@ -94,7 +111,7 @@ export function renderScans(
       "aria-pressed",
       String(scan.entity_key === selected?.entity_key),
     );
-    button.onclick = () => {
+    const activate = () => {
       body
         .querySelectorAll("button")
         .forEach((b) => b.setAttribute("aria-pressed", String(b === button)));
@@ -103,6 +120,15 @@ export function renderScans(
         .forEach((r) => r.classList.remove("selected"));
       row.classList.add("selected");
       select(scan);
+    };
+    row.tabIndex = 0;
+    row.setAttribute("aria-label", `${scanPrefix(scan)} ${scan.suffix}`);
+    row.onclick = () => activate();
+    row.onkeydown = (event) => {
+      if (event.target === row && ["Enter", " "].includes(event.key)) {
+        event.preventDefault();
+        activate();
+      }
     };
     name.append(
       element("small", `ses-${scan.session ?? "?"} / run-${scan.run ?? "—"}`),

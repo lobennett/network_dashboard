@@ -1,4 +1,5 @@
 import { type RecordRow } from "./review";
+import { label } from "./labels";
 export type Subject = {
   entities: RecordRow[];
   attempts: RecordRow[];
@@ -190,7 +191,5 @@ export function rawScans(data: Pick<Subject, "entities">) {
   );
 }
 export function humanize(value: unknown) {
-  return String(value ?? "Unrecorded")
-    .replaceAll("_", " ")
-    .replaceAll("-", " ");
+  return label(value);
 }
