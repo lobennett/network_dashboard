@@ -22,7 +22,10 @@ behavior metrics and first-level inputs, with a downloadable inventory.
 The **Pipeline guide** shows the source-to-fMRIPrep workflow and both approval gates;
 it opens without a data connection.
 
-NiiVue displays BOLD, fieldmap/magnitude images, and FreeSurfer volumes/surfaces.
+NiiVue presets pair ribbon/anatomy, white/pial surfaces, fieldmap/magnitude, and
+T1w-space BOLD references/anatomy when matching files are available. Opacity controls
+help inspect boundaries. File history shows recorded changes from inputs to outputs,
+with technical records and the dependency tree expandable.
 Anatomy and surfaces require recorded defacing ancestry. Manual surface decisions
 remain in the pipeline’s review file; the dashboard never approves scans.
 

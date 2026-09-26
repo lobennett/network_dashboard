@@ -412,3 +412,26 @@ header {
 .completion-actions details { max-width: 100%; font-size: 14px; }
 .evidence-link { display: block; border: none; color: var(--cardinal); text-align: left; overflow-wrap: anywhere; max-width: 100%; }
 @media(max-width:650px) { .completion-list > li { grid-template-columns:minmax(0,1fr); gap:10px; } .completion-checklist > summary span { display:block; margin:8px 0 0; } }
+
+.viewer-presets { flex-basis: 100%; min-width: 0; border-left: 3px solid var(--cardinal); padding: 0 14px; margin-bottom: 12px; }
+.viewer-presets h3 { margin: 0 0 10px; font-size: 16px; }
+.viewer-presets select { max-width: 100%; margin: 0 8px 8px 0; }
+.viewer-presets p, .viewer-preset-controls p { font-size: 14px; margin: 8px 0; }
+.viewer-preset-controls label { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 14px; }
+.viewer-preset-controls input[type="range"] { width: 170px; accent-color: var(--cardinal); }
+.viewer-preset-controls details { margin: 12px 0; }
+.viewer-preset-controls details button { display: block; overflow-wrap: anywhere; max-width: 100%; text-align: left; }
+.provenance-journey { overflow-wrap: anywhere; }
+.history-source { padding: 12px 16px; background: var(--wash); }
+.history-source p { margin: 8px 0 0; font-size: 13px; }
+.history-steps { list-style: none; margin: 0 0 20px 12px; padding: 0 0 0 20px; border-left: 2px solid var(--rule); }
+.history-step { position: relative; padding: 20px 0; border-bottom: 1px solid var(--rule); }
+.history-step::before { content: ""; position: absolute; left: -27px; top: 25px; width: 12px; height: 12px; border-radius: 50%; background: var(--cardinal); }
+.history-step h4 { display: inline; margin: 0 8px 0 0; font-size: 16px; }
+.history-step > details { margin-top: 12px; font-size: 13px; }
+.history-files { margin-top: 10px; display: grid; grid-template-columns: 65px minmax(0,1fr); align-items: baseline; gap: 4px 10px; font-size: 13px; }
+.history-files button { grid-column: 2; text-align: left; padding: 2px 0; min-width: 0; overflow-wrap: anywhere; }
+.history-files button:disabled { opacity: 1; color: var(--ink); text-decoration: none; cursor: default; }
+.history-files > span { grid-column: 1; grid-row: 1; }
+.history-source .history-files { display: block; }
+.history-source .history-files button { display: block; margin-top: 4px; }

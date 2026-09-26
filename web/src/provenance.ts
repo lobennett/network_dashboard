@@ -9,7 +9,7 @@ export type Provenance = {
 const purposes: Record<string, string> = {
   conversion: 'Convert source images to BIDS',
   defacing: 'Remove facial anatomy',
-  trim_dummy: 'Remove the first seven BOLD volumes',
+  trim_dummy: 'Trim BOLD volumes',
   events: 'Convert behavioral trials to BIDS events and align scan timing',
   freesurfer: 'Reconstruct cortical surfaces from reviewed anatomy',
   fmriprep: 'Preprocess BOLD using approved anatomy and surfaces',
@@ -57,5 +57,94 @@ export function provenanceTree(data: Provenance): HTMLElement {
   }
   root.append(branch(data.artifact.id, new Set()));
   if (data.truncated || count >= 500) root.append(element('p', 'Large history: showing a limited tree.', 'gap'));
+  return root;
+}
+
+/** Show the selected version's recorded ancestors in dependency order. */
+export function provenanceJourney(data: Provenance, inspect?: (id: string) => void): HTMLElement {
+  const root = element('section', '', 'provenance-journey');
+  root.append(element('p', 'Recorded changes, from inputs to the selected file. Separate inputs can converge on one step.', 'muted'));
+  const files = new Map(data.artifacts.map(f => [f.id, f]));
+  files.set(data.artifact.id, data.artifact);
+  const incoming = new Map<string, Provenance['links']>();
+  for (const link of data.links) incoming.set(link.output, [...(incoming.get(link.output) ?? []), link]);
+  const visited = new Set<string>(), active = new Set<string>(), sources = new Set<string>();
+  const order: string[] = [], grouped = new Map<string, Provenance['links']>();
+  let cycle = false, limited = data.truncated;
+  function visit(id: string, depth = 0) {
+    if (active.has(id)) { cycle = true; return; }
+    if (visited.has(id)) return;
+    if (visited.size >= 500 || depth >= 100) { limited = true; return; }
+    active.add(id); visited.add(id);
+    const parents = incoming.get(id) ?? [];
+    if (!parents.length) sources.add(id);
+    for (const link of parents) visit(link.input, depth + 1);
+    for (const link of parents) {
+      if (!grouped.has(link.attempt)) { order.push(link.attempt); grouped.set(link.attempt, []); }
+      grouped.get(link.attempt)!.push(link);
+    }
+    active.delete(id);
+  }
+  visit(data.artifact.id);
+  function fileList(ids: Iterable<string>, label: string) {
+    const list = element('div', '', 'history-files');
+    list.append(element('span', label, 'muted'));
+    for (const id of new Set(ids)) {
+      const file = files.get(id), name = file?.path.split('/').pop() ?? 'File outside displayed history';
+      const item = element('button', name, 'text-button');
+      item.title = file?.path ?? id;
+      item.disabled = !file || !inspect;
+      if (inspect && file) item.onclick = () => inspect(id);
+      list.append(item);
+    }
+    return list;
+  }
+  if (sources.size) {
+    const source = element('div', '', 'history-source');
+    source.append(fileList(sources, 'Earliest recorded inputs'));
+    source.append(element('p', data.truncated && [...sources].some(id => !files.has(id))
+      ? 'Earlier history omitted by display limit' : 'Earlier history unrecorded', 'muted'));
+    root.append(source);
+  }
+  // An attempt can have several outputs; gather every dependency before ordering steps.
+  const producers = new Map<string, Set<string>>();
+  for (const [id, links] of grouped)
+    for (const link of links) producers.set(link.output, new Set([...(producers.get(link.output) ?? []), id]));
+  const ordered: string[] = [], done = new Set<string>(), visiting = new Set<string>();
+  function orderAttempt(id: string) {
+    if (visiting.has(id)) { cycle = true; return; }
+    if (done.has(id)) return;
+    visiting.add(id);
+    for (const link of grouped.get(id) ?? [])
+      for (const parent of producers.get(link.input) ?? []) if (parent !== id) orderAttempt(parent);
+    visiting.delete(id); done.add(id); ordered.push(id);
+  }
+  for (const id of order) orderAttempt(id);
+  const steps = element('ol', '', 'history-steps');
+  for (const id of ordered) {
+    const links = grouped.get(id)!, attempt = data.attempts.find(a => a.id === id);
+    const stage = String(attempt?.stage ?? links[0].relation);
+    const params = attempt?.parameters as RecordRow | undefined;
+    const title = stage === 'conversion' && params?.pfile ? 'Reconstruct fieldmap from GE P-file'
+      : stage === 'trim_dummy' ? 'Trim BOLD volumes' : purposes[stage] ?? stage.replaceAll('_', ' ');
+    const step = element('li', '', 'history-step');
+    step.append(element('h4', title));
+    if (attempt?.status) step.append(element('span', String(attempt.status).replaceAll('_', ' '), 'badge'));
+    if (stage === 'trim_dummy' && Number.isInteger(params?.discarded_volumes) && Number(params?.discarded_volumes) >= 0)
+      step.append(element('p', `${params!.discarded_volumes} initial volumes removed.`, 'history-change'));
+    step.append(fileList(links.map(l => l.input), 'Inputs'), fileList(links.map(l => l.output), 'Outputs'));
+    const record = element('details');
+    record.append(element('summary', 'Versions, parameters and file identities'));
+    if (attempt) record.append(details(attempt));
+    else record.append(element('p', 'Transformation details unrecorded.', 'muted'));
+    for (const fileId of new Set(links.flatMap(l => [l.input,l.output]))) {
+      const file = files.get(fileId);
+      if (file) record.append(details(file));
+    }
+    step.append(record); steps.append(step);
+  }
+  root.append(steps);
+  if (cycle) root.append(element('p', 'Cycle in recorded history; repeated references are shown once.', 'gap'));
+  if (limited) root.append(element('p', 'Partial history: display limits omit some earlier records.', 'gap'));
   return root;
 }

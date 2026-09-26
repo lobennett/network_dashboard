@@ -6,7 +6,8 @@ import { element, details, type RecordRow } from "./review";
 import { scanPrefix } from "./scans";
 import { reviewMetrics, humanize, type Subject, type Stage } from "./pipeline";
 import { viewFile } from "./viewer";
-import { provenanceTree, type Provenance } from "./provenance";
+import { viewerPresets, type ViewerPreset, type PresetFile } from "./viewer-presets";
+import { provenanceJourney, provenanceTree, type Provenance } from "./provenance";
 type Artifact = {
   id: string;
   path: string;
@@ -195,7 +196,7 @@ export class ScanInspector {
         choices.classList.toggle("surface-controls", stage === "surfaces");
         const unique = [
           ...new Map(
-            available.map((f) => [`${f.path}/${f.content_id}`, f]),
+            available.map((f) => [`${f.dataset_id}/${f.path}/${f.content_id}`, f]),
           ).values(),
         ];
         unique.sort(
@@ -203,27 +204,30 @@ export class ScanInspector {
             Number(b.path.includes("echo-2")) -
             Number(a.path.includes("echo-2")),
         );
-        if (stage === "surfaces") {
-          for (const norm of unique.filter((f) =>
-            f.path.endsWith("/mri/norm.mgz"),
-          )) {
-            const ribbon = unique.find(
-              (f) =>
-                f.dataset_id === norm.dataset_id &&
-                f.path === norm.path.replace(/norm\.mgz$/, "ribbon.mgz"),
-            );
-            if (ribbon) {
-              const button = element(
-                "button",
-                "Inspect ribbon over anatomy",
-                "primary",
-              );
-              button.title = norm.path;
-              button.onclick = () =>
-                void this.preview(norm, display, generation, [ribbon]);
-              choices.append(button);
-            }
-          }
+        let companions: Artifact[] = [];
+        if (stage === "fmriprep" && unique.some(f => /_space-T1w_.*boldref\.nii/.test(f.path))) {
+          companions = await get<Artifact[]>(`artifacts?subject=${encodeURIComponent(String(scan.subject))}&dataset_stage=fmriprep&q=_desc-preproc_T1w.nii&limit=1000&preview=true`);
+          if (generation !== this.generation || view !== viewGeneration) return;
+        }
+        const presets = viewerPresets([...available, ...companions]);
+        if (presets.length) {
+          const block = element("section", "", "viewer-presets");
+          block.append(element("h3", "Review presets"));
+          const picker = element("select");
+          picker.setAttribute("aria-label", "Review preset");
+          presets.forEach((preset, i) => {
+            const duplicate = presets.filter(p => p.label === preset.label).length > 1;
+            const option = element("option", preset.label + (duplicate ? ` · ${preset.base.path.split('/').pop()}` : ""));
+            option.value = String(i); picker.append(option);
+          });
+          const description = element("p", presets[0].description, "muted");
+          picker.onchange = () => { description.textContent = presets[Number(picker.value)].description; };
+          const open = element("button", "Open preset", "primary");
+          open.onclick = () => {
+            const preset = presets[Number(picker.value)];
+            void this.preview(preset.base, display, generation, preset.overlays, preset);
+          };
+          block.append(picker, open, description); choices.append(block);
         }
         if (stage === "surfaces") {
           for (const group of [
@@ -427,10 +431,11 @@ export class ScanInspector {
   }
   private load = 0;
   private async preview(
-    file: Artifact,
+    file: PresetFile,
     display: HTMLElement,
     generation: number,
-    overlays: Artifact[] = [],
+    overlays: PresetFile[] = [],
+    preset?: ViewerPreset,
   ) {
     const load = ++this.load;
     this.viewer?.cleanup();
@@ -442,7 +447,7 @@ export class ScanInspector {
     const status = element("p", "Loading NiiVue…", "muted");
     display.replaceChildren(status, frame);
     try {
-      const viewer = await viewFile(canvas, file.id, file.path, overlays);
+      const viewer = await viewFile(canvas, file.id, file.path, overlays, preset?.mode);
       if (
         generation !== this.generation ||
         load !== this.load ||
@@ -451,7 +456,34 @@ export class ScanInspector {
         viewer.cleanup();
       else {
         this.viewer = viewer;
-        status.textContent = file.path.split("/").pop()!;
+        status.textContent = preset?.label ?? file.path.split("/").pop()!;
+        if (preset) {
+          const controls = element("div", "", "viewer-preset-controls");
+          controls.append(element("p", preset.description, "muted"));
+          const label = element("label", preset.mode === "surfaces" ? "Pial opacity " : "Overlay opacity ");
+          const opacity = element("input");
+          opacity.type = "range"; opacity.min = "0"; opacity.max = "1"; opacity.step = "0.05"; opacity.value = "0.35";
+          const value = element("output", "35%");
+          opacity.oninput = () => {
+            const amount = Number(opacity.value);
+            if (preset.mode === "surfaces") {
+              viewer.meshes[1].setProperty("opacity", amount, viewer.gl);
+              viewer.updateGLVolume();
+            }
+            else viewer.setOpacity(1, amount);
+            value.textContent = `${Math.round(amount * 100)}%`;
+          };
+          label.append(opacity, value); controls.append(label);
+          const sources = element("details");
+          sources.append(element("summary", "Files in this view"));
+          for (const source of [file, ...overlays]) {
+            const trace = element("button", source.path.split('/').pop(), "text-button");
+            trace.title = source.path;
+            trace.onclick = () => void this.lineage(source.id, display, generation);
+            sources.append(trace);
+          }
+          controls.append(sources); display.insertBefore(controls, frame);
+        }
       }
     } catch (error) {
       if (generation === this.generation && load === this.load) {
@@ -468,27 +500,20 @@ export class ScanInspector {
     display.replaceChildren(element("p", "Loading file history…", "muted"));
     const load = this.load;
     try {
-      const data = await get<Lineage>(`artifacts/${id}/lineage`);
+      const [data, history] = await Promise.all([
+        get<Lineage>(`artifacts/${id}/lineage`), get<Provenance>(`artifacts/${id}/tree`),
+      ]);
       if (generation !== this.generation || load !== this.load) return;
-      display.replaceChildren(
-        element("h3", "File provenance"),
-        details(data.artifact),
-      );
-      const tree = element("button", "Show provenance tree", "primary");
-      const treePanel = element("div");
-      tree.onclick = async () => {
-        tree.disabled = true;
-        try {
-          const history = await get<Provenance>(`artifacts/${id}/tree`);
-          if (generation === this.generation && load === this.load)
-            treePanel.replaceChildren(provenanceTree(history));
-        } catch (error) {
-          treePanel.replaceChildren(element("p", String(error), "gap"));
-        } finally {
-          tree.disabled = false;
-        }
-      };
-      display.append(tree, treePanel);
+      const technical = element("details");
+      technical.append(element("summary", "Selected file details"), details(data.artifact));
+      display.replaceChildren(element("h3", "File history"),
+        element("p", data.artifact.path.split('/').pop(), "file-path"),
+        provenanceJourney(history, target => void this.lineage(target, display, generation)), technical);
+      const tree = element("details");
+      tree.append(element("summary", "Explore the full dependency tree"), provenanceTree(history));
+      display.append(tree);
+      const related = element("details");
+      related.append(element("summary", "Related files and transformation records"));
       if (/\.(json|tsv|txt|log|html)$/.test(data.artifact.path)) {
         const open = element("button", "Open recorded file");
         open.onclick = () => void openRecordedFile(id, data.artifact.path);
@@ -513,7 +538,7 @@ export class ScanInspector {
           "file-button",
         );
         button.onclick = () => void this.lineage(other.id, display, generation);
-        display.append(button);
+        related.append(button);
       }
       for (const attempt of data.attempts) {
         const block = element("details");
@@ -521,8 +546,9 @@ export class ScanInspector {
           element("summary", "Transformation record"),
           details(attempt),
         );
-        display.append(block);
+        related.append(block);
       }
+      if (data.links.length || data.attempts.length) display.append(related);
     } catch (error) {
       if (generation === this.generation && load === this.load)
         display.replaceChildren(element("p", String(error), "gap"));

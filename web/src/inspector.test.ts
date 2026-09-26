@@ -128,3 +128,48 @@ it("offers the subject registration viewer without surface controls", async () =
   expect(panel.querySelector(".surface-group")).toBeNull();
   expect(vi.mocked(get).mock.calls[0][0]).toContain("dataset_stage=fmriprepviz");
 });
+
+it("opens a matched ribbon preset and exposes overlay opacity", async () => {
+  const norm={id:"norm",path:"subjects/sub-s03/mri/norm.mgz",dataset_id:"fs",preview_available:true,content_id:"hash"};
+  const ribbon={...norm,id:"ribbon",path:"subjects/sub-s03/mri/ribbon.mgz"};
+  vi.mocked(get).mockResolvedValue([norm,ribbon]);
+  const setOpacity=vi.fn();
+  vi.mocked(viewFile).mockResolvedValue({cleanup:vi.fn(),setOpacity} as unknown as Awaited<ReturnType<typeof viewFile>>);
+  const panel=document.querySelector("article")!;
+  await new ScanInspector(panel).show(data,scan,"surfaces");
+  await vi.waitFor(()=>expect(panel.querySelector('.viewer-presets .primary')).not.toBeNull());
+  panel.querySelector<HTMLButtonElement>('.viewer-presets .primary')!.click();
+  await vi.waitFor(()=>expect(panel.querySelector('input[type=range]')).not.toBeNull());
+  const slider=panel.querySelector<HTMLInputElement>('input[type=range]')!;
+  slider.value="0.6";slider.dispatchEvent(new Event('input'));
+  expect(setOpacity).toHaveBeenCalledWith(1,0.6);
+  expect(viewFile).toHaveBeenCalledWith(expect.anything(),"norm",norm.path,[ribbon],"ribbon");
+});
+
+it("opens the readable history immediately with technical records collapsed", async () => {
+  const artifact={id:"image",path:"scan_bold.nii.gz",preview_available:true};
+  vi.mocked(get).mockImplementation(async path => {
+    if (path.endsWith('/lineage')) return {artifact,artifacts:[artifact],links:[],attempts:[],ancestry:'unrecorded'};
+    if (path.endsWith('/tree')) return {artifact,artifacts:[artifact],links:[],attempts:[],truncated:false};
+    return [artifact];
+  });
+  const panel=document.querySelector("article")!;
+  await new ScanInspector(panel).show(data,scan,"bids");
+  await vi.waitFor(()=>expect(panel.querySelector('.preview-choices .text-button')).not.toBeNull());
+  panel.querySelector<HTMLButtonElement>('.preview-choices .text-button')!.click();
+  await vi.waitFor(()=>expect(panel.querySelector('.provenance-journey')).not.toBeNull());
+  expect(panel.querySelector('.preview-display > details')?.hasAttribute('open')).toBe(false);
+  expect(panel.textContent).toContain('Earlier history unrecorded');
+});
+
+
+it("preserves same-content anatomy across reconstructions when matching presets", async () => {
+  const norm={id:"norm-a",path:"subjects/sub-s03/mri/norm.mgz",dataset_id:"a",preview_available:true,content_id:"same"};
+  const other={...norm,id:"norm-b",dataset_id:"b"};
+  const ribbon={...norm,id:"ribbon-a",path:"subjects/sub-s03/mri/ribbon.mgz",content_id:"ribbon"};
+  vi.mocked(get).mockResolvedValue([norm,other,ribbon]);
+  const panel=document.querySelector("article")!;
+  await new ScanInspector(panel).show(data,scan,"surfaces");
+  await vi.waitFor(()=>expect(panel.querySelector('.viewer-presets')).not.toBeNull());
+  expect(panel.querySelector('.viewer-presets select')?.textContent).toContain('Ribbon over anatomy');
+});
