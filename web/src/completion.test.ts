@@ -50,3 +50,10 @@ it("keeps missing evidence visible and links checks to the relevant stage", () =
   )!;
   expect(complete.closest("details")?.open).toBe(false);
 });
+
+it("shows final approval in the closed checklist summary", () => {
+  const panel = completionChecklist({subject: "s03", status: "complete", note: "", snapshot: {},
+    checks: [{id: "final-review", title: "Final output review", status: "complete",
+      detail: "Approved by LB", stage: "registration", evidence: []}]}, vi.fn());
+  expect(panel.querySelector("summary")?.textContent).toContain("Approved by LB");
+});

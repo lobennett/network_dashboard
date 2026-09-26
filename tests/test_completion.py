@@ -203,3 +203,22 @@ def test_split_reports_require_anatomical_and_every_current_session(db):
     result = item(subject_completion(db, "s03"), "reports")
     assert result["status"] == "complete"
     assert len(result["evidence"]) == 3
+
+
+def test_final_review_matches_current_campaign_and_preserves_rejection(db):
+    from network_dashboard.completion import subject_completion
+    setup(db)
+    project = {'path':'derivatives/fMRIPrep-current', 'commit':'current'}
+    db.execute('INSERT INTO metadata VALUES (?,?)', ('active_projects',json.dumps({'fmriprep':project})))
+    db.execute('ALTER TABLE findings ADD COLUMN evidence_path TEXT')
+    value = {'decision':'approved','reviewer':'LB','reviewed_at':'now','notes':'Reviewed',
+             'inputs':{'source_project':project['path'],'source_commit':'old'}}
+    path = 'code/network_fmri/output_review/sub-s03.json'
+    db.execute('INSERT INTO findings VALUES (?,?,?,?)',('scan','final-output-review',json.dumps(value),path))
+    assert item(subject_completion(db,'s03'),'final-review')['status'] == 'review'
+    value['inputs']['source_commit'] = 'current'
+    db.execute('UPDATE findings SET evidence_json=?', (json.dumps(value),))
+    assert item(subject_completion(db,'s03'),'final-review')['status'] == 'complete'
+    value['decision'] = 'needs-correction'
+    db.execute('UPDATE findings SET evidence_json=?', (json.dumps(value),))
+    assert item(subject_completion(db,'s03'),'final-review')['status'] == 'failed'

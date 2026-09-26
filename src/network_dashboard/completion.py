@@ -319,18 +319,30 @@ def subject_completion(db, subject):
         "registration",
         registration,
     )
+    final_reviews = [json.loads(f["evidence_json"]) for f in findings
+                     if f["finding_type"] == "final-output-review"]
+    current_reviews = [r for r in final_reviews if current_path and project.get("commit")
+                       and r.get("inputs", {}).get("source_project") == current_path
+                       and r.get("inputs", {}).get("source_commit") == project["commit"]]
+    review = max(current_reviews, key=lambda r: r.get("reviewed_at", ""), default={})
+    approved = review.get("decision") == "approved"
+    rejected = review.get("decision") == "needs-correction"
     add(
         "final-review",
         "Final output review",
-        "review",
-        "Inspect fMRIPrep reports and registration before release. No final output approval is recorded by this dashboard.",
+        "complete" if approved else "failed" if rejected else "review",
+        (f"{'Approved' if approved else 'Needs correction'} by {review['reviewer']} · {review['reviewed_at']}"
+         + (f" — {review['notes']}" if review.get("notes") else "")) if review else
+        "Inspect fMRIPrep reports and registration before release. Record approval or a correction request with processing review-output.",
         "registration",
+        evidence(f"/output_review/sub-{subject}.json"),
     )
     return {
         "subject": subject,
         "snapshot": metadata,
-        "status": "awaiting-review"
-        if all(c["status"] == "complete" for c in checks[:-1])
+        "status": "complete" if all(c["status"] == "complete" for c in checks)
+        else "awaiting-review"
+        if not rejected and all(c["status"] == "complete" for c in checks[:-1])
         else "incomplete",
         "checks": checks,
         "note": "Snapshot evidence, not live job status or approval for every analysis. Indexed files are checksum-verified when opened.",
