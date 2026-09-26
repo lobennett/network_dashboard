@@ -254,3 +254,14 @@ def test_registration_viewer_is_subject_scoped_and_separate_from_preprocessing(s
     result = client(study).get('/api/artifacts?subject=s03&dataset_stage=fmriprepviz').json()
     assert [r['id'] for r in result] == ['viewer']
     assert client(study).get('/api/artifacts?subject=s03&dataset_stage=fmriprep').json() == []
+
+
+def test_split_reports_follow_selected_session(study):
+    with sqlite3.connect(study[1]) as db:
+        db.execute("INSERT INTO artifacts VALUES (2,'derivatives/fMRIPrep-25.2.5+pilot+review','dataset:fprep','dataset',NULL)")
+        db.executemany('INSERT INTO artifact_versions VALUES (?,?,?,?,?)', [
+            (name, 'fprep', name, 'sha256:missing', '{}') for name in
+            ('sub-s03_anat.html', 'sub-s03_ses-01_func.html', 'sub-s03_ses-11_func.html',
+             'sub-s030_anat.html', 'figures/sub-s03_ses-11_func.html')])
+    result = client(study).get('/api/artifacts?subject=s03&dataset_stage=fmriprep&q=sub-s03_ses-11_task-rest_&include_subject_report=true').json()
+    assert {r['path'] for r in result} == {'sub-s03_anat.html', 'sub-s03_ses-11_func.html'}

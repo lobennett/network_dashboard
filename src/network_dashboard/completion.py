@@ -7,6 +7,7 @@ from fastapi import HTTPException
 
 from .coverage import study_coverage
 from .records import rows
+from .reports import is_subject_report, reports_complete
 
 
 def latest_state(attempts, stage, subject):
@@ -255,16 +256,19 @@ def subject_completion(db, subject):
     reports = [
         {"id": f["id"], "path": f["study_path"]}
         for f in files
-        if f["path"] == f"sub-{subject}.html"
+        if is_subject_report(f["path"], subject)
         and current_path
         and output_checks
         and f["study_path"].startswith(current_path + "+review/")
     ]
     add(
         "reports",
-        "fMRIPrep report",
-        "complete" if reports else "pending",
-        "Current extracted subject report; historical and archived-only reports do not count.",
+        "fMRIPrep reports",
+        "complete" if reports_complete(
+            {PurePosixPath(r["path"]).name for r in reports}, subject,
+            [run for check in output_checks for run in check.get("runs", [])],
+        ) else "pending",
+        "Current anatomical and session reports; historical and archived-only reports do not count.",
         "fmriprep",
         reports,
     )

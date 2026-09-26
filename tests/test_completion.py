@@ -178,3 +178,28 @@ def test_current_failed_attempt_does_not_depend_on_log_path(db):
             ("active_attempts", json.dumps(current)),
         )
         assert item(subject_completion(db, "s03"), "fmriprep")["status"] == "failed"
+
+
+def test_split_reports_require_anatomical_and_every_current_session(db):
+    from network_dashboard.completion import subject_completion
+
+    setup(db)
+    db.execute("ALTER TABLE findings ADD COLUMN evidence_path TEXT")
+    root = "derivatives/fMRIPrep-25.2.5+full+current"
+    db.execute("INSERT INTO metadata VALUES (?,?)", ("active_projects", json.dumps(
+        {"fmriprep": {"path": root, "commit": "current"}})))
+    db.execute("INSERT INTO artifacts VALUES (?,?,?)", (root + "+review", "dataset:fmri", "dataset"))
+    db.execute("INSERT INTO findings VALUES (?,?,?,?)", ("scan", "fmriprep-output-check",
+        json.dumps({"source_commit": "current", "issues": [],
+                    "runs": [{"run": "sub-s03_ses-01_task-rest_run-1"},
+                             {"run": "sub-s03_ses-02_task-rest_run-1"}]}),
+        root + "+review/code/network_fmri/fmriprep-evidence.json"))
+    file(db, "sub-s03_anat.html", dataset="fmri")
+    file(db, "sub-s03_ses-01_func.html", dataset="fmri")
+    assert item(subject_completion(db, "s03"), "reports")["status"] == "pending"
+    file(db, "sub-s03_ses-02_func.html", dataset="fmri", status="historical")
+    assert item(subject_completion(db, "s03"), "reports")["status"] == "pending"
+    db.execute("UPDATE artifact_observations SET availability='available',commit_hash='commit' WHERE artifact_id='sub-s03_ses-02_func.html'")
+    result = item(subject_completion(db, "s03"), "reports")
+    assert result["status"] == "complete"
+    assert len(result["evidence"]) == 3

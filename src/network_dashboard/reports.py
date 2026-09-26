@@ -107,3 +107,29 @@ def _report_archive(db, study, artifact, original, stack, *, fetcher=None, archi
     if failure:
         raise failure
     raise HTTPException(404, 'Verified archive for this report is unavailable')
+
+
+def is_subject_report(path, subject, scan_query=""):
+    path = PurePosixPath(path)
+    if len(path.parts) != 1 or not re.fullmatch(
+        rf"sub-{re.escape(subject)}(?:_anat|(?:_ses-[A-Za-z0-9]+)?_func)?\.html",
+        path.name,
+    ):
+        return False
+    session = re.search(r"(?:^|_)(ses-[A-Za-z0-9]+)(?:_|$)", scan_query)
+    return not session or path.name in {
+        f"sub-{subject}.html", f"sub-{subject}_anat.html",
+        f"sub-{subject}_{session[1]}_func.html",
+    }
+
+
+def reports_complete(names, subject, runs):
+    if f"sub-{subject}.html" in names:
+        return True
+    if not runs:
+        return False
+    required = {f"sub-{subject}_anat.html"}
+    for run in runs:
+        session = re.search(r"(?:^|_)(ses-[A-Za-z0-9]+)(?:_|$)", run["run"])
+        required.add(f"sub-{subject}" + (f"_{session[1]}" if session else "") + "_func.html")
+    return required <= names

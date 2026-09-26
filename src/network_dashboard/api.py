@@ -14,6 +14,7 @@ from starlette.middleware.cors import CORSMiddleware
 
 from network_dashboard.artifacts import content_path
 from network_dashboard.checksums import verifiable
+from network_dashboard.reports import is_subject_report
 from network_dashboard.records import connect, rows, dataset_roots
 
 
@@ -98,9 +99,10 @@ def create_app(index: Path, study: Path, web: Path | None = None, *, allowed_ori
             if subject is not None and not re.fullmatch(r'[A-Za-z0-9]+', subject):
                 raise HTTPException(400, 'Invalid subject')
             if include_subject_report and subject:
-                report = f'sub-{subject}.html'
-                found = rows(db, "SELECT * FROM artifact_versions WHERE instr(path,?)>0 OR path=? OR path LIKE ? ORDER BY path",
-                             (q, report, '%/' + report))
+                found = rows(db, "SELECT * FROM artifact_versions WHERE instr(path,?)>0 OR path LIKE ? ORDER BY path",
+                             (q, f'sub-{subject}%html'))
+                found = [item for item in found if q in item['path']
+                         or is_subject_report(item['path'], subject, q)]
             else:
                 found = rows(db, "SELECT * FROM artifact_versions WHERE instr(path,?)>0 ORDER BY path", (q,))
             if subject:
