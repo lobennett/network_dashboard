@@ -43,7 +43,7 @@ export function completionChecklist(
   );
   if (data.status === "complete") {
     const review = data.checks.find((c) => c.id === "final-review");
-    summary.append(element("span", review?.detail ?? "Final review approved", "badge"));
+    summary.append(element("span", review?.detail.split(" · ")[0] ?? "Final review approved", "badge"));
   }
   panel.append(summary, element("p", data.note, "muted"));
   const download = element("button", "Download checklist (JSON)");
