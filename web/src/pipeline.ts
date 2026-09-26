@@ -71,7 +71,7 @@ export const stages = [
       "After fMRIPrep merges, fmriprepviz overlays the approved FreeSurfer ribbon on each T1w-space BOLD reference. Inspect the subject's interactive flipbook for misregistration across scans and sessions. Outputs and input checksums are saved in DataLad; this does not approve scans for analysis.",
   },
 ] as const;
-export type Stage = (typeof stages)[number]["id"];
+export type Stage = (typeof stages)[number]["id"] | "current";
 const milestoneStages: Record<string, Stage | "legacy"> = {
   conversion: "source",
   "flywheel-selection": "source",

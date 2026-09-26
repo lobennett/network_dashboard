@@ -1,10 +1,11 @@
+import { stageMetrics, evidenceCard, type StageFile } from "./stage-record";
 import { get } from "./api";
 import { surfaceGroup, surfaceLabel } from "./surface-groups";
 import { taskPreview } from "./task-preview";
 import { openRecordedFile } from "./document";
 import { element, details, type RecordRow } from "./review";
 import { scanPrefix } from "./scans";
-import { reviewMetrics, humanize, type Subject, type Stage } from "./pipeline";
+import { humanize, type Subject, type Stage } from "./pipeline";
 import { viewFile } from "./viewer";
 import { viewerPresets, type ViewerPreset, type PresetFile } from "./viewer-presets";
 import { provenanceJourney, provenanceTree, type Provenance } from "./provenance";
@@ -56,6 +57,7 @@ export class ScanInspector {
         : stage === "fmriprep"
           ? `${scanQuery}&subject=${encodeURIComponent(String(scan.subject))}&dataset_stage=fmriprep&include_subject_report=true`
           : scanQuery;
+    const boundary=`&subject=${encodeURIComponent(String(scan.subject))}`+(stage==="current"?"&current=true":`&stage=${stage}`);
     const belongsToSelection = (file: Artifact) =>
       stage !== "fmriprep" ||
       file.path.includes(scanPrefix(scan) + "_") ||
@@ -78,7 +80,7 @@ export class ScanInspector {
       ),
     );
     this.panel.replaceChildren(heading);
-    const m = subjectOutputs ? {} : reviewMetrics(data, scan);
+    const m = subjectOutputs ? {} : stageMetrics(data,scan,stage);
     const summary = element("div", "", "scan-metrics");
     const metrics: RecordRow =
       stage === "trim"
@@ -91,7 +93,7 @@ export class ScanInspector {
                 : undefined,
           }
         : {
-            TRs: m.tr_count,
+            TRs: m.tr_count??m.size_t,
             "Mean FD (mm)":
               m.fd_mean === undefined
                 ? undefined
@@ -109,7 +111,7 @@ export class ScanInspector {
       }
     this.panel.append(summary);
     const decisions = data.decisions.filter((d) =>
-      subjectOutputs ? d.scope === "surface" : d.entity_key === scan.entity_key,
+      stage==="registration"?d.scope==="output":subjectOutputs ? d.scope === "surface" : d.entity_key === scan.entity_key,
     );
     const outcome = element("div", "", "scan-decisions");
     for (const d of decisions) {
@@ -146,7 +148,7 @@ export class ScanInspector {
     const showEvidence = () => {
       this.viewer?.cleanup();
       this.viewer = undefined;
-      content.replaceChildren(element("h3", "Recorded evidence"));
+      content.replaceChildren(element("h3", "Evidence for this stage"));
       if (Object.keys(m).length) {
         const metrics = element("details");
         metrics.append(element("summary", "All recorded metrics"), details(m));
@@ -156,9 +158,7 @@ export class ScanInspector {
         (f) =>
           f.entity_key === scan.entity_key && f.finding_type !== "scan-review",
       )) {
-        const block = element("details");
-        block.append(element("summary", humanize(f.finding_type)), details(f));
-        content.append(block);
+        content.append(evidenceCard(f));
       }
       for (const d of decisions) {
         const block = element("details");
@@ -180,7 +180,7 @@ export class ScanInspector {
       );
       try {
         files ??= await get<Artifact[]>(
-          `artifacts?${query}&limit=1000&preview=true`,
+          `artifacts?${query}${boundary}&limit=1000&preview=true`,
         );
         if (generation !== this.generation || view !== viewGeneration) return;
         files = files.filter(belongsToSelection);
@@ -206,7 +206,7 @@ export class ScanInspector {
         );
         let companions: Artifact[] = [];
         if (stage === "fmriprep" && unique.some(f => /_space-T1w_.*boldref\.nii/.test(f.path))) {
-          companions = await get<Artifact[]>(`artifacts?subject=${encodeURIComponent(String(scan.subject))}&dataset_stage=fmriprep&q=_desc-preproc_T1w.nii&limit=1000&preview=true`);
+          companions = await get<Artifact[]>(`artifacts?subject=${encodeURIComponent(String(scan.subject))}&dataset_stage=fmriprep&stage=fmriprep&q=_desc-preproc_T1w.nii&limit=1000&preview=true`);
           if (generation !== this.generation || view !== viewGeneration) return;
         }
         const presets = viewerPresets([...available, ...companions]);
@@ -362,7 +362,7 @@ export class ScanInspector {
       this.viewer = undefined;
       content.replaceChildren(element("p", "Loading indexed files…", "muted"));
       try {
-        const all = await get<Artifact[]>(`artifacts?${query}&limit=1000`);
+        const all = await get<Artifact[]>(`artifacts?${query}${boundary}&limit=1000`);
         if (generation !== this.generation || view !== viewGeneration) return;
         const list = element("div", "", "indexed-files");
         const display = element("div", "", "preview-display");
@@ -389,17 +389,17 @@ export class ScanInspector {
       this.viewer = undefined;
       await taskPreview(
         content,
-        scanQuery,
+        scanQuery + (stage==="current"?"&current=true":`&subject=${encodeURIComponent(String(scan.subject))}&stage=${stage}`),
         () => generation === this.generation && view === viewGeneration,
       );
     };
     const tabs: [string, () => void | Promise<void>][] = [
       ["Images & reports", showFiles],
-      ...(!subjectOutputs && scan.suffix === "bold"
+      ...(!subjectOutputs && ["events","review","current"].includes(stage) && scan.suffix === "bold"
         ? [["Events & design", showTask] as [string, () => Promise<void>]]
         : []),
       [
-        "Decisions & metrics",
+        "Evidence",
         () => {
           viewGeneration++;
           this.load++;
@@ -428,6 +428,15 @@ export class ScanInspector {
             : 1
           : 0;
     (navigation.children[initialTab] as HTMLButtonElement).click();
+  }
+  showArtifact(file:StageFile,stage:Stage,trace=false){
+    this.clear();
+    const display=element('div','','preview-display');
+    this.panel.replaceChildren(element('h2',file.path.split('/').pop()),element('p',`File recorded for ${humanize(stage)}. Content is verified before display.`,'muted'),display);
+    if(trace)void this.lineage(file.id,display,this.generation);
+    else if(isImage(file.path))void this.preview(file,display,this.generation);
+    else if(file.path.endsWith('.html'))void openRecordedFile(file.id,file.path);
+    else void this.lineage(file.id,display,this.generation);
   }
   private load = 0;
   private async preview(

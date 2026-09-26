@@ -16,6 +16,7 @@ from network_dashboard.artifacts import content_path
 from network_dashboard.checksums import verifiable
 from network_dashboard.reports import is_subject_report
 from network_dashboard.records import connect, rows, dataset_roots
+from network_dashboard.stages import Stage, stage_record
 
 
 def create_app(index: Path, study: Path, web: Path | None = None, *, allowed_origins: list[str] | None = None, fetcher=None, archive_fetcher=None) -> FastAPI:
@@ -90,11 +91,20 @@ def create_app(index: Path, study: Path, web: Path | None = None, *, allowed_ori
         with connect(index) as db:
             return subject_completion(db, subject)
 
+    @app.get("/api/subjects/{subject}/stages/{stage}")
+    def subject_stage(subject: str, stage: Stage):
+        if not re.fullmatch(r"[A-Za-z0-9]+", subject):
+            raise HTTPException(404, "Unknown subject")
+        with connect(index) as db:
+            if not db.execute("SELECT 1 FROM entities WHERE subject=?", (subject,)).fetchone():
+                raise HTTPException(404, "Unknown subject")
+            return stage_record(db, study, subject, stage)
+
     @app.get("/api/artifacts")
     def artifacts(q: str = "", limit: int = Query(200, ge=1, le=1000), preview: bool = False,
                   subject: str | None = None,
                   dataset_stage: Literal['freesurfer', 'fmriprep', 'fmriprepviz'] | None = None,
-                  include_subject_report: bool = False):
+                  include_subject_report: bool = False, stage: Stage | None = None, current: bool = False):
         with connect(index) as db:
             if subject is not None and not re.fullmatch(r'[A-Za-z0-9]+', subject):
                 raise HTTPException(400, 'Invalid subject')
@@ -108,6 +118,13 @@ def create_app(index: Path, study: Path, web: Path | None = None, *, allowed_ori
             if subject:
                 pattern = re.compile(r'(?:^|[/_])sub-' + re.escape(subject) + r'(?:[/_.]|$)')
                 found = [item for item in found if pattern.search(item['path'])]
+            if current:
+                found = [item for item in found if db.execute("SELECT 1 FROM artifact_observations WHERE artifact_id=? AND commit_hash IS NOT NULL AND availability IN ('available','unavailable')", (item['id'],)).fetchone()]
+            if stage:
+                if not subject:
+                    raise HTTPException(400, "Stage files require a subject")
+                allowed = {f['id'] for f in stage_record(db, study, subject, stage)['outputs']}
+                found = [item for item in found if item['id'] in allowed]
             if dataset_stage:
                 roots = dataset_roots(db, study)
                 def matches_stage(item):

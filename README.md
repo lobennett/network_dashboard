@@ -14,7 +14,9 @@ Complete authentication, leave the command running, and open the
 Images and reports download when opened; restart the command to refresh records.
 No local DataLad installation is needed. See [setup](web/public/connect.html).
 
-Use **Review data** to inspect scans, surfaces and Flywheel selections.
+Use **Stage history** to inspect each step’s inputs, outputs, exclusions and software.
+Use **Current files** for the latest inventory. Missing historical receipts remain
+unrecorded; current data are not substituted for earlier versions.
 Each subject has a preprocessing checklist with outstanding checks, evidence links
 and a JSON download. Successful processing and manual approval stay separate.
 **Data completeness** lists missing scan files, behavioral exceptions, per-run

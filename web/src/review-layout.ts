@@ -36,48 +36,17 @@ export function subjectSummary(data: Subject): HTMLElement {
   }
   return panel;
 }
-export function reviewControls(
-  active: Stage,
-  select: (stage: Stage) => void,
-): HTMLElement {
-  const panel = element("div", "", "review-controls");
-  const modes = element("nav", "", "review-modes");
-  modes.setAttribute("aria-label", "Review views");
-  const mode =
-    active === "source"
-      ? "source"
-      : active === "surfaces"
-        ? "surfaces"
-        : "scans";
-  for (const [id, label, stage] of [
-    ["scans", "Scans", "review"],
-    ["surfaces", "Surfaces", "surfaces"],
-    ["source", "Flywheel sources", "source"],
-  ] as const) {
-    const button = element("button", label);
-    button.setAttribute("aria-pressed", String(mode === id));
-    button.onclick = () => select(stage);
-    modes.append(button);
+export function reviewControls(active:Stage,select:(stage:Stage)=>void,data?:Subject):HTMLElement {
+  const panel=element('div','','review-controls');
+  const modes=element('nav','','review-modes');modes.setAttribute('aria-label','Data views');
+  for(const [title,stage] of [['Stage history',active==='current'?'source':active],['Current files','current']] as const){
+    const button=element('button',title);button.setAttribute('aria-pressed',String((stage==='current')===(active==='current')));button.onclick=()=>select(stage);modes.append(button);
   }
   panel.append(modes);
-  if (mode === "scans") {
-    const label = element("label", "Inspect stage");
-    const chooser = element("select");
-    chooser.setAttribute("aria-label", "Inspect stage");
-    for (const stage of stages.filter(
-      (s) => !["source", "surfaces"].includes(s.id),
-    )) {
-      const option = element(
-        "option",
-        stage.id === "review" ? "Scan decisions" : stage.title,
-      );
-      option.value = stage.id;
-      option.selected = stage.id === active;
-      chooser.append(option);
-    }
-    chooser.onchange = () => select(chooser.value as Stage);
-    label.append(chooser);
-    panel.append(label);
+  if(active!=='current'){
+    const steps=element('nav','','stage-navigation');steps.setAttribute('aria-label','Subject pipeline stages');
+    stages.forEach((stage,i)=>{const button=element('button');button.append(element('span',String(i+1),'stage-number'),element('span',stage.title));if(data)button.append(element('small',stage.id==='source'&&data.findings.some(f=>f.finding_type==='flywheel-acquisition')?'Audit available':stageStatus(stage.id,data.attempts),'stage-state'));button.setAttribute('aria-current',active===stage.id?'step':'false');button.onclick=()=>select(stage.id);steps.append(button);});
+    panel.append(steps,element('p','FreeSurfer runs alongside MRIQC. Scan and surface approval both precede fMRIPrep.','stage-parallel-note'));
   }
   return panel;
 }

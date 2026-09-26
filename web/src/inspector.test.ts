@@ -173,3 +173,17 @@ it("preserves same-content anatomy across reconstructions when matching presets"
   await vi.waitFor(()=>expect(panel.querySelector('.viewer-presets')).not.toBeNull());
   expect(panel.querySelector('.viewer-presets select')?.textContent).toContain('Ribbon over anatomy');
 });
+
+it('includes the subject boundary on every historical file query',async()=>{
+ vi.mocked(get).mockResolvedValue([]);
+ await new ScanInspector(document.querySelector('article')!).show(data,scan,'bids');
+ await vi.waitFor(()=>expect(get).toHaveBeenCalled());
+ const path=String(vi.mocked(get).mock.calls[0][0]);
+ expect(path).toContain('stage=bids');expect(path).toContain('subject=s03');
+});
+it('shows output approval rather than surface approval during registration review',async()=>{
+ vi.mocked(get).mockResolvedValue([]);
+ const panel=document.querySelector('article')!;
+ await new ScanInspector(panel).show({...data,decisions:[{scope:'output',decision:'approved',reviewer:'LB',reason:'Registration reviewed'}]},scan,'registration');
+ expect(panel.textContent).toContain('Registration reviewed');expect(panel.textContent).toContain('LB');
+});

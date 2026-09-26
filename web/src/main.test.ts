@@ -8,6 +8,7 @@ vi.mock("./api", async (original) => ({
 vi.mock("./viewer", () => ({ viewFile: vi.fn() }));
 beforeEach(() => {
   vi.resetModules();
+  history.replaceState(null,"","/");
   window.scrollTo = vi.fn();
   document.body.innerHTML = '<div id="app"></div>';
 });
@@ -22,9 +23,9 @@ it("waits for a connection click before accessing the local network", async () =
   await import("./main");
   expect(get).not.toHaveBeenCalled();
   document.querySelector<HTMLButtonElement>(".connection button")!.click();
-  await vi.waitFor(() =>
-    expect(document.querySelector(".scan-name")).not.toBeNull(),
-  );
+  await vi.waitFor(() => expect(document.querySelector(".review-modes button")).not.toBeNull());
+  Array.from(document.querySelectorAll<HTMLButtonElement>(".review-modes button")).find(b=>b.textContent==="Current files")!.click();
+  await vi.waitFor(() => expect(document.querySelector(".scan-name")).not.toBeNull());
   expect(document.querySelector(".connection")).toBeNull();
 });
 function responses(lineage: (path: string) => Promise<unknown>) {
@@ -35,6 +36,7 @@ function responses(lineage: (path: string) => Promise<unknown>) {
         built_at: new Date(Date.now() - 899_000).toISOString(),
       });
     if (path === "subjects") return Promise.resolve([{ subject: "s03" }]);
+    if(path.includes('/stages/'))return Promise.resolve({stage:'review',subject:'s03',snapshot_kind:'recorded_stage_evidence',inputs:[],outputs:[],processing:[],findings:[],decisions:[],milestones:[]});
     if (path.startsWith("subjects/"))
       return Promise.resolve({
         entities: [
@@ -77,9 +79,10 @@ it("an obsolete lineage error cannot replace the newer selected file", async () 
         }),
   );
   await import("./main");
-  await vi.waitFor(() =>
-    expect(document.querySelector(".scan-name")).not.toBeNull(),
-  );
+  await vi.waitFor(() => expect(document.querySelector(".review-modes button")).not.toBeNull());
+  Array.from(document.querySelectorAll<HTMLButtonElement>(".review-modes button")).find(b=>b.textContent==="Current files")!.click();
+  await vi.waitFor(() => expect(document.querySelector(".scan-name")).not.toBeNull());
+  Array.from(document.querySelectorAll<HTMLButtonElement>(".review-modes button")).find(b=>b.textContent==="Current files")!.click();
   document.querySelector<HTMLButtonElement>(".scan-name")!.click();
   document.querySelector<HTMLButtonElement>(".inspector-tabs button")!.click();
   await vi.waitFor(() =>
@@ -133,4 +136,21 @@ it("offers the pipeline guide before connecting and returns to review", async ()
   location.hash = "review";
   window.dispatchEvent(new Event("hashchange"));
   expect(document.getElementById("review-page")!.hidden).toBe(false);
+});
+
+it('clears old source buttons before a new subject finishes loading',async()=>{
+ vi.mocked(get).mockImplementation(async(path:string)=>{
+  if(path==='metadata')return {built_at:new Date().toISOString(),stale:false};
+  if(path==='subjects')return [{subject:'s03'},{subject:'s04'}];
+  if(path==='subjects/s04')return new Promise(()=>{});
+  if(path.endsWith('/completion'))return {checks:[],snapshot:{},subject:'s03',status:'incomplete'};
+  const finding={finding_type:'flywheel-acquisition',entity_key:'fw',evidence_json:JSON.stringify({label:'Original scan',bids_prefix:'sub-s03_ses-01_task-rest_run-1_bold',snapshot_kind:'current_inventory',decision:'selected',files:[]})};
+  if(path.includes('/stages/'))return {snapshot_kind:'recorded_stage_evidence',subject:'s03',processing:[],inputs:[],outputs:[],findings:[finding],decisions:[],milestones:[]};
+  return {entities:[{entity_key:'fw',namespace:'flywheel',subject:'s03'}],findings:[finding],decisions:[],attempts:[]};
+ });
+ await import('./main');
+ await vi.waitFor(()=>expect(document.querySelector('#source-content button')).not.toBeNull());
+ Array.from(document.querySelectorAll<HTMLButtonElement>('#subjects button')).find(b=>b.textContent==='sub-s04')!.click();
+ expect(document.querySelector('#source-content')?.childElementCount).toBe(0);
+ expect(document.querySelector('#subject-title')?.textContent).toBe('sub-s04');
 });

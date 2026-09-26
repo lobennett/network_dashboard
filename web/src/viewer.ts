@@ -1,3 +1,4 @@
+import { Niivue } from "@niivue/niivue";
 import type { ViewerPreset } from "./viewer-presets";
 import { apiUrl } from "./api";
 
@@ -8,7 +9,6 @@ export async function viewFile(
   overlays: {id: string; path: string}[] = [],
   mode?: ViewerPreset["mode"],
 ) {
-  const { Niivue } = await import("@niivue/niivue");
   const urls: string[] = [];
   const viewer = new Niivue({
     isResizeCanvas: true,

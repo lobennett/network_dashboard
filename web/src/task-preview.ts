@@ -306,7 +306,7 @@ export async function taskPreview(
       host.append(
         element(
           "p",
-          "No event table is indexed. Rest scans do not normally have task events.",
+          query.includes("&stage=")?"Event file versions are unrecorded for this stage. Check Current files for today’s event tables; rest scans normally have no task events.":"No event table is indexed. Rest scans do not normally have task events.",
           "empty",
         ),
       );

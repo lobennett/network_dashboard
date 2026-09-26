@@ -26,15 +26,14 @@ it("opens a functional scan by default, but prioritizes pending reviews", () => 
     })?.entity_key,
   ).toBe("two");
 });
-it("keeps stages reachable without an eight-card navigation strip", () => {
-  const select = vi.fn();
-  const controls = reviewControls("events", select);
-  expect(controls.querySelectorAll("nav button")).toHaveLength(3);
-  const chooser = controls.querySelector("select")!;
-  expect(chooser.value).toBe("events");
-  chooser.value = "fmriprep";
-  chooser.dispatchEvent(new Event("change"));
-  expect(select).toHaveBeenCalledWith("fmriprep");
+it("makes all stages directly reachable without a stage dropdown", () => {
+  const select=vi.fn();
+  const controls=reviewControls("events",select);
+  expect(controls.querySelector('select')).toBeNull();
+  const button=Array.from(controls.querySelectorAll('button')).find(b=>b.textContent?.includes('Trim volumes'))!;
+  button.click();
+  expect(select).toHaveBeenCalledWith('trim');
+  expect(controls.textContent).toContain('Current files');
 });
 it("does not describe absent reviews as approved", () => {
   expect(subjectSummary(data).textContent).toContain("Unrecorded");

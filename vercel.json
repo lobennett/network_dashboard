@@ -3,5 +3,43 @@
   "framework": "vite",
   "installCommand": "npm ci --prefix web",
   "buildCommand": "VITE_API_BASE_URL=http://127.0.0.1:18782 npm run build --prefix web",
-  "outputDirectory": "web/dist"
+  "outputDirectory": "web/dist",
+  "headers": [
+    {
+      "source": "/",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-store"
+        }
+      ]
+    },
+    {
+      "source": "/index.html",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-store"
+        }
+      ]
+    },
+    {
+      "source": "/connect.html",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-store"
+        }
+      ]
+    },
+    {
+      "source": "/recovery.js",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-store"
+        }
+      ]
+    }
+  ]
 }

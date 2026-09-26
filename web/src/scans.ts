@@ -1,10 +1,11 @@
+import { stageMetrics } from "./stage-record";
 import { element, type RecordRow } from "./review";
 import {
   rawScans,
-  reviewMetrics,
   scanOutcome,
   type Subject,
   humanize,
+  type Stage,
 } from "./pipeline";
 type ScanData = Pick<Subject, "entities" | "findings" | "decisions">;
 export function scanForDestination(scans: RecordRow[], destination: string) {
@@ -40,6 +41,7 @@ export function renderScans(
   data: ScanData,
   select: (scan: RecordRow) => void,
   selected?: RecordRow,
+  stage:Stage="review",
 ): HTMLElement {
   const panel = element("div", "", "scan-browser");
   const scans = rawScans(data).sort((a, b) =>
@@ -81,20 +83,21 @@ export function renderScans(
         ? "anatomy"
         : "fmap"
     : "all";
-  toolbar.append(filter, kind, queue);
+  toolbar.append(filter, kind);
+  if(["current","review"].includes(stage))toolbar.append(queue);
   const count = element("p", `${scans.length} scans`, "muted");
   const scroll = element("div", "", "scan-table");
   const table = element("table");
   const head = element("thead");
   const heading = element("tr");
-  for (const text of ["Scan", "Use"]) heading.append(element("th", text));
+  for (const text of ["Scan", ["current","review"].includes(stage)?"Use":"Stage record"]) heading.append(element("th", text));
   head.append(heading);
   const body = element("tbody");
   table.append(head, body);
   scroll.append(table);
   panel.append(toolbar, count, scroll);
   const entries = scans.map((scan) => {
-    const m = reviewMetrics(data, scan),
+    const m = stageMetrics({...data,attempts:[]}, scan, stage),
       outcome = scanOutcome(data, scan);
     const d = data.decisions.find(
       (d) => d.entity_key === scan.entity_key && d.scope === "preprocessing",
@@ -141,7 +144,7 @@ export function renderScans(
         ? Number(m.fd_mean).toFixed(3)
         : "—";
     const disposition = element("td");
-    disposition.append(
+    if(["current","review"].includes(stage)) disposition.append(
       element(
         "span",
         d?.decision === "keep"
@@ -151,6 +154,7 @@ export function renderScans(
             : String(d?.decision ?? "Not reviewed"),
       ),
     );
+    if (!["current","review"].includes(stage)) disposition.append(element("small","Recorded here"));
     if (outcome.flagged)
       disposition.append(
         element(
@@ -166,8 +170,8 @@ export function renderScans(
     if (outcome.analysisExcluded)
       disposition.append(element("small", "Task models: exclude", "excluded"));
     disposition.title = humanize(m.flags ?? "");
-    if (m.tr_count)
-      name.append(element("small", `${m.tr_count} volumes · FD ${fd} mm`));
+    if (m.tr_count ?? m.size_t)
+      name.append(element("small", `${m.tr_count??m.size_t} volumes${fd!=="—"?` · FD ${fd} mm`:""}`));
     row.append(name, disposition);
     body.append(row);
     return {
