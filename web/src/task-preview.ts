@@ -8,11 +8,15 @@ export type BehaviorSummary = {
   response_time_denominator: number;
   median_response_time_s: number | null;
   no_keypress_trials: number;
-  go_omissions: number;
+  omissions?: number | null;
   basis: string;
   by_condition: Record<string, Omit<BehaviorSummary, "basis" | "by_condition">>;
 };
-export function behaviorSummary(metrics: BehaviorSummary): HTMLElement {
+export const omissionLabel = (path: string) =>
+  /(?:^|_)task-(?:goNogo|stopSignal)[^_]*_/i.test(path.split("/").pop() ?? path)
+    ? "Go omissions" : "Omissions";
+
+export function behaviorSummary(metrics: BehaviorSummary, path: string): HTMLElement {
   const panel = element("section", "", "behavior-summary");
   panel.append(
     element("h3", "Behavioral metrics"),
@@ -37,7 +41,7 @@ export function behaviorSummary(metrics: BehaviorSummary): HTMLElement {
     "Recorded accuracy",
     "Median response time",
     "No keypress",
-    "Go omissions",
+    omissionLabel(path),
   ])
     row.append(element("th", title));
   head.append(row);
@@ -57,7 +61,7 @@ export function behaviorSummary(metrics: BehaviorSummary): HTMLElement {
         ? "Unavailable"
         : `${m.median_response_time_s.toFixed(3)} s (n=${m.response_time_denominator})`,
       String(m.no_keypress_trials),
-      String(m.go_omissions),
+      m.omissions == null ? "Unavailable" : String(m.omissions),
     ])
       tr.append(element("td", value));
     body.append(tr);
@@ -89,13 +93,6 @@ export const isTaskTable = (path: string) =>
   /(?:designmatrix|design_matrix|design-matrix).*\.(csv|tsv)$/i.test(path);
 const number = (value: string | undefined) =>
   value?.trim() && Number.isFinite(Number(value)) ? Number(value) : NaN;
-export const goOmissions = (rows: Record<string, string>[]) =>
-  rows.filter(
-    (r) =>
-      r.trial_id === "test_trial" &&
-      r.trial_type === "go" &&
-      number(r.key_press) === -1,
-  ).length;
 const svgNS = "http://www.w3.org/2000/svg";
 function svg(tag: string, attrs: Record<string, string | number>) {
   const node = document.createElementNS(svgNS, tag);
@@ -182,8 +179,7 @@ function eventTimeline(table: Table): HTMLElement {
       picture.append(text);
     }
     chart.replaceChildren(picture);
-    const omitted = goOmissions(rows);
-    count.textContent = `${rows.length} rows selected · ${valid.length} plotted${rows.some((r) => r.trial_type === "go" && "key_press" in r) ? ` · ${omitted} go omissions (test_trial, key_press = −1)` : ""}. Hover over a mark for its recorded values.`;
+    count.textContent = `${rows.length} rows selected · ${valid.length} plotted. Hover over a mark for its recorded values.`;
   };
   filter.onchange = draw;
   panel.append(filter, count, chart);
@@ -333,7 +329,7 @@ export async function taskPreview(
         download.target = "_blank";
         download.rel = "noopener";
         display.append(download);
-        if (table.behavior) display.append(behaviorSummary(table.behavior));
+        if (table.behavior) display.append(behaviorSummary(table.behavior, file.path));
         if (table.truncated)
           display.append(
             element(

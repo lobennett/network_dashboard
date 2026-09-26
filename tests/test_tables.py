@@ -50,3 +50,23 @@ def test_behavior_metrics_cover_all_test_trials_not_just_preview(tmp_path):
     assert metrics['go_omissions']==1
     assert metrics['no_keypress_trials']==2
     assert metrics['by_condition']['nogo']['choice_accuracy']==1
+
+
+@pytest.mark.parametrize(('task','condition','expected'), [
+    ('flanker','incongruent',2), ('goNogo','nogo_success',1),
+    ('stopSignal','stop_success',1), ('stopSignalWFlanker','stop_success_congruent',1),
+])
+def test_omissions_use_task_response_requirements(tmp_path, task, condition, expected):
+    path=tmp_path/f'sub-s03_task-{task}_events.tsv'
+    path.write_text('onset\tduration\ttrial_id\ttrial_type\tkey_press\tcorrect_response\n'
+                    '0\t1\ttest_trial\tgo\t-1\t32\n'
+                    f'1\t1\ttest_trial\t{condition}\t-1\t32\n'
+                    '2\t1\ttest_trial\twithhold\t-1\t-1\n'
+                    '3\t1\ttest_cue\tgo\t-1\t32\n')
+    assert read_table(path)['behavior']['omissions']==expected
+
+
+def test_omissions_are_unknown_without_response_expectation(tmp_path):
+    path=tmp_path/'sub-s03_task-flanker_events.tsv'
+    path.write_text('onset\tduration\ttrial_id\ttrial_type\tkey_press\n0\t1\ttest_trial\tcongruent\t-1\n')
+    assert read_table(path)['behavior']['omissions'] is None

@@ -242,7 +242,7 @@ export function renderCoverage(
             if (request !== metricRequest) return;
             evidence.replaceChildren(
               element("h2", `${scan.prefix.split("/").pop()} · Behavior`),
-              behaviorSummary(result.behavior),
+              behaviorSummary(result.behavior, scan.events[0].path),
             );
             evidence.scrollIntoView({ block: "nearest" });
           } catch (error) {

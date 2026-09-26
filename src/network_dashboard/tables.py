@@ -1,6 +1,7 @@
 """Bounded, checksum-verified event and saved-design previews."""
 import csv
 import math
+import re
 from pathlib import Path
 from fastapi import HTTPException
 
@@ -36,7 +37,7 @@ def read_table(path: Path, *, name: str | None = None, max_rows=5000, max_column
                 raise HTTPException(422, 'Table contains a malformed row')
             if kind == 'events':
                 if row.get('trial_id') == 'test_trial':
-                    trials.append({key: row.get(key) for key in ('trial_id','trial_type','choice_acc','response_time','key_press')})
+                    trials.append({key: row.get(key) for key in ('trial_id','trial_type','choice_acc','response_time','key_press','correct_response')})
                 try:
                     onset = float(row['onset'])
                     if math.isfinite(onset):
@@ -47,8 +48,10 @@ def read_table(path: Path, *, name: str | None = None, max_rows=5000, max_column
             if len(shown) < max_rows:
                 shown.append({k: row[k] for k in fields[:max_columns]})
     from network_dashboard.behavior import summarize_behavior
+    task_match = re.search(r"(?:^|_)task-([^_]+)", Path(name).name)
+    task = task_match.group(1) if task_match else ""
     return {'kind': kind, 'columns': fields[:max_columns], 'rows': shown,
-            'behavior': summarize_behavior(trials) if kind == 'events' else None,
+            'behavior': summarize_behavior(trials, task=task) if kind == 'events' else None,
             'total_rows': total, 'total_columns': len(fields),
             'truncated': total > max_rows or len(fields) > max_columns,
             'nonmonotonic_pairs': backwards if kind == 'events' else None}
