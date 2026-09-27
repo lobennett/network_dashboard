@@ -1,3 +1,6 @@
+import {eventsStage} from './events-stage';
+import {taskPreview} from './task-preview';
+import {overviewPage,exclusionsPage,type Overview,type Exclusions} from './overview';
 import {b0Panel,type B0Inventory,type B0Check} from './b0';
 import "./styles.css";
 import "./layout.css";
@@ -17,12 +20,12 @@ import { completionChecklist, type Completion } from "./completion";
 
 const app = document.querySelector<HTMLDivElement>("#app")!;
 app.innerHTML = `<a class="skip-link" href="#review-page">Skip to content</a>
-<header><a class="brand" href="#review">Network<span>Data review</span></a><nav class="page-nav" aria-label="Pages"><a href="#review">Review data</a><a href="#coverage">Data completeness</a><a href="#pipeline">Pipeline guide</a></nav><span id="freshness" role="status">Snapshot not loaded</span></header>
+<header><a class="brand" href="#review">Network<span>Data review</span></a><nav class="page-nav" aria-label="Pages"><a href="#overview">Study progress</a><a href="#review">Review data</a><a href="#exclusions">Exclusions</a><a href="#coverage">Data completeness</a><a href="#pipeline">Pipeline guide</a></nav><span id="freshness" role="status">Snapshot not loaded</span></header>
 <div class="workspace" id="review-page"><aside><h2>Subjects</h2><nav id="subjects" aria-label="Subjects"></nav><p class="aside-note">Read-only review<br>Recorded in DataLad</p><a class="aside-help" href="/connect.html">Connection help</a></aside>
 <main><div id="notice" role="alert"></div><div class="subject-heading"><div><h1 id="subject-title">Review data</h1><p class="subject-caption">Follow a processing step, or browse Current files.</p></div><details class="download-menu"><summary>Download records</summary><div id="manifest-downloads" class="manifest-downloads"></div></details></div>
 <details class="subject-status"><summary>Subject status and checks</summary><div id="subject-summary"></div><div id="subject-completion"></div></details><div id="workflow"></div><div id="stage-detail"></div><div id="source-content"></div>
 <section class="review-workspace" aria-label="Scan review"><div class="scan-section"><div class="scan-section-heading"><h2>Scans</h2><span id="scan-counts" class="muted"></span></div><div id="scan-list"></div></div><article id="inspector" aria-label="Selected scan"></article></section>
-</main></div><main id="pipeline-page" hidden></main><main id="coverage-page" hidden></main>`;
+</main></div><main id="pipeline-page" hidden></main><main id="coverage-page" hidden></main><main id="overview-page" hidden></main><main id="exclusions-page" hidden></main>`;
 const find = <T extends HTMLElement = HTMLElement>(id: string) =>
   document.getElementById(id) as T;
 const inspector = new ScanInspector(find("inspector"));
@@ -31,12 +34,13 @@ let active: Stage = initialStage === "current" || stages.some(s => s.id === init
   data: Subject | undefined,
   selectedScan: RecordRow | undefined,
   request = 0;
+let studyConnected=false;
 let stageRequest=0, stageRecord:StageRecord|undefined;
 function stageData(value:Subject):Subject {
  return stageSubject(value,active,stageRecord);
 }
 function rememberSelection(){
- const url=new URL(location.href);url.searchParams.set("stage",active);
+ const url=new URL(location.href);url.searchParams.delete("focus");url.searchParams.set("stage",active);
  if(data?.entities[0]?.subject)url.searchParams.set("subject",String(data.entities[0].subject));
  if(selectedScan?.entity_key)url.searchParams.set("scan",String(selectedScan.entity_key));
  history.replaceState(null,"",url);
@@ -78,7 +82,7 @@ function chooseStage(stage: Stage, preferred?:RecordRow) {
   find("notice").textContent="";
   find("workflow").replaceChildren(reviewControls(stage, chooseStage, data));
   find("stage-detail").replaceChildren(stageReport(data,stage,undefined,openStageFile));
-  document.querySelector<HTMLElement>(".review-workspace")!.hidden = (stage === "source" || stage === "trim" || stage === "b0");
+  document.querySelector<HTMLElement>(".review-workspace")!.hidden = (stage === "source" || stage === "trim" || stage === "b0" || stage === "events");
   find("source-content").replaceChildren();
   const subjectOutputs=stage==="surfaces"||stage==="registration";
   document.querySelector(".review-workspace")!.classList.toggle("subject-outputs",subjectOutputs);
@@ -92,7 +96,7 @@ function chooseStage(stage: Stage, preferred?:RecordRow) {
     rememberSelection();
     refreshScanList();
     const selection=subjectOutputs?data.entities.find(e=>e.subject):selectedScan;
-    if(selection&&stage!=="source"&&stage!=="trim"&&stage!=="b0")void inspector.show(stageData(data),selection,stage);
+    if(selection&&stage!=="source"&&stage!=="trim"&&stage!=="b0"&&stage!=="events")void inspector.show(stageData(data),selection,stage);
     const outcomes=rawScans(stageData(data)).map(scan=>scanOutcome(stageData(data!),scan));
     find("scan-counts").textContent=["current","review"].includes(stage)?`${outcomes.filter(o=>o.pending).length} need review / ${outcomes.filter(o=>o.flagged).length} flagged`:"Stage-specific files and evidence";
   };
@@ -108,6 +112,13 @@ function chooseStage(stage: Stage, preferred?:RecordRow) {
       if(scan){chooseStage("bids",scan);}
       else find("notice").textContent="The planned destination has no indexed BIDS scan. Its source record remains available here.";
     }));
+    if(stage==='events'){
+      const host=element('div');find('source-content').append(host);host.append(element('p','Loading behavioral and event inventory…','muted'));
+      void get<Coverage>(`coverage?subject=${encodeURIComponent(subject)}`).then(value=>{
+        if(current!==stageRequest)return;
+        host.replaceChildren(eventsStage(value,(scan,display)=>{const table=element('div');display.append(table);void taskPreview(table,`q=${encodeURIComponent(scan.prefix+'_')}&subject=${encodeURIComponent(subject)}&current=true`,()=>current===stageRequest&&table.isConnected);},file=>void openRecordedFile(file.id,file.path)));
+      }).catch(error=>{if(current===stageRequest)host.replaceChildren(element('p',String(error),'gap'));});
+    }
     if(stage==='b0'){
       const host=element('div');find('source-content').append(host);host.append(element('p','Loading B0 scan inventory…','muted'));
       void get<B0Inventory>(`subjects/${encodeURIComponent(subject)}/b0`).then(value=>{
@@ -153,7 +164,8 @@ async function chooseSubject(subject: string) {
     if (current !== request) return;
     data = value;
     const savedScan=new URL(location.href).searchParams.get("scan");
-    selectedScan=value.entities.find(e=>e.entity_key===savedScan)??initialScan(value);
+    const focus=new URL(location.href).searchParams.get('focus');
+    selectedScan=(focus?scanForDestination(rawScans(value),focus):undefined)??value.entities.find(e=>e.entity_key===savedScan)??initialScan(value);
     find("subject-summary").replaceChildren(subjectSummary(value));
     void get<Completion>(`subjects/${encodeURIComponent(subject)}/completion`)
       .then((checklist) => {
@@ -200,6 +212,7 @@ async function start() {
       get<RecordRow>("metadata"),
       get<{ subject: string }[]>("subjects"),
     ]);
+    studyConnected=true;
     const update = () => {
       const built = Date.parse(String(metadata.built_at ?? "")),
         valid = Number.isFinite(built);
@@ -220,9 +233,11 @@ async function start() {
       const savedSubject=new URL(location.href).searchParams.get("subject");
       await chooseSubject(subjects.find(s=>s.subject===savedSubject)?.subject??subjects[0].subject);
       if (location.hash === "#coverage") await showCoverage();
+
     } else
       find("notice").textContent =
         "No subjects indexed. Build records from the canonical study first.";
+    if (["#overview","#exclusions"].includes(location.hash)) await showStudyPage();
   } catch (error) {
     find("notice").textContent = `Cannot load the study: ${error}`;
     find("freshness").textContent = "Index unavailable";
@@ -235,7 +250,7 @@ if (import.meta.env.VITE_API_BASE_URL) {
     connect.disabled = true;
     await start();
     connect.disabled = false;
-    if (data) connection.remove();
+    if (studyConnected) connection.remove();
   };
   const connection = element("section", undefined, "connection");
   const instructions = element("a", "Setup instructions");
@@ -315,34 +330,26 @@ async function showCoverage() {
       host.replaceChildren(element("p", String(error), "gap"));
   }
 }
+let studyPageRequest=0;
+async function showStudyPage(){
+ const kind=location.hash==='#exclusions'?'exclusions':'overview',host=find(`${kind}-page`),current=++studyPageRequest;
+ if(!studyConnected){const link=element('a','Connect on Review data');link.href='#review';host.replaceChildren(element('h1',kind==='overview'?'Study progress':'Exclusions'),link);return;}
+ host.replaceChildren(element('p','Loading recorded study snapshot…','muted'));
+ const select=async(subject:string,stage:Stage)=>{location.hash='review';const loading=chooseSubject(subject),selection=request;await loading;if(selection===request&&data?.entities.some(e=>e.subject===subject))chooseStage(stage);};
+ try{
+  if(kind==='overview'){const value=await get<Overview>('overview');if(current===studyPageRequest)host.replaceChildren(overviewPage(value,select));}
+  else {const value=await get<Exclusions>('exclusions');if(current===studyPageRequest)host.replaceChildren(exclusionsPage(value,select));}
+ }catch(error){if(current===studyPageRequest)host.replaceChildren(element('p',`Study snapshot unavailable: ${error}. Restart with connector 0.8.0 or newer.`,'gap'));}
+}
 function route() {
-  const coverage = location.hash === "#coverage";
-  const guide = location.hash === "#pipeline";
-  find("review-page").hidden = guide || coverage;
-  find("coverage-page").hidden = !coverage;
-  if (coverage) void showCoverage();
-  find("pipeline-page").hidden = !guide;
-  document.title = guide
-    ? "Pipeline guide · Network"
-    : coverage
-      ? "Data completeness · Network"
-      : "Review data · Network";
-  document
-    .querySelectorAll<HTMLAnchorElement>(".page-nav a")
-    .forEach((a) =>
-      a.setAttribute(
-        "aria-current",
-        a.hash === (guide ? "#pipeline" : coverage ? "#coverage" : "#review")
-          ? "page"
-          : "false",
-      ),
-    );
-  document.querySelector<HTMLAnchorElement>(".skip-link")!.href = guide
-    ? "#pipeline-page"
-    : coverage
-      ? "#coverage-page"
-      : "#review-page";
-  window.scrollTo(0, 0);
+ const page=['overview','exclusions','pipeline','coverage'].includes(location.hash.slice(1))?location.hash.slice(1):'review';
+ for(const id of ['review','pipeline','coverage','overview','exclusions'])find(`${id}-page`).hidden=id!==page;
+ if(page==='coverage')void showCoverage();
+ if(page==='overview'||page==='exclusions')void showStudyPage();
+ document.title=`${({review:'Review data',pipeline:'Pipeline guide',coverage:'Data completeness',overview:'Study progress',exclusions:'Exclusions'} as Record<string,string>)[page]} · Network`;
+ document.querySelectorAll<HTMLAnchorElement>('.page-nav a').forEach(a=>a.setAttribute('aria-current',a.hash===`#${page}`?'page':'false'));
+ document.querySelector<HTMLAnchorElement>('.skip-link')!.href=`#${page}-page`;
+ window.scrollTo(0,0);
 }
 window.addEventListener("hashchange", route);
 route();

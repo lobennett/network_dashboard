@@ -58,3 +58,20 @@ it('previews PDF bytes as a PDF with a download fallback',async()=>{
  expect(document.querySelector('object')?.getAttribute('type')).toBe('application/pdf');
  expect(document.querySelector('a')?.download).toBe('gs.pdf');
 });
+it('summarizes a verified defacing receipt while preserving the recorded fields',async()=>{
+ Object.defineProperty(HTMLDialogElement.prototype,'showModal',{value:vi.fn(),configurable:true});
+ vi.stubGlobal('fetch',vi.fn().mockResolvedValue({ok:true,text:async()=>JSON.stringify({status:'success',software:{name:'PyDeface',version:'2.1.0'},images:[{path:'sub-s03_T1w.nii.gz',output_sha256:'abc'}]})}));
+ await openRecordedFile('receipt','code/network_fw2bids/defacing/sub-s03.json');
+ expect(document.querySelector('.receipt-summary')?.textContent).toContain('PyDeface');
+ expect(document.querySelector('.receipt-summary')?.textContent).toContain('sub-s03_T1w.nii.gz');
+ expect(document.querySelector('details pre')?.textContent).toContain('output_sha256');
+});
+it('counts actual BIDS-validator issues and links affected scans',async()=>{
+ Object.defineProperty(HTMLDialogElement.prototype,'showModal',{value:vi.fn(),configurable:true});
+ const report={issues:{issues:[{severity:'warning',code:'SIDECAR',location:'/sub-s03/ses-01/func/sub-s03_ses-01_task-rest_run-1_echo-2_bold.json'}]},summary:{}};
+ vi.stubGlobal('fetch',vi.fn().mockResolvedValue({ok:true,text:async()=>JSON.stringify(report)}));
+ await openRecordedFile('validation','derivatives/bids-validator/desc-precuration_validation.json');
+ expect(document.querySelector('.receipt-summary')?.textContent).toContain('1 warning');
+ const link=document.querySelector<HTMLAnchorElement>('.receipt-summary a')!;
+ expect(link?.getAttribute('href')).toContain('focus=');expect(link?.getAttribute('href')).toContain('sub-s03');
+});

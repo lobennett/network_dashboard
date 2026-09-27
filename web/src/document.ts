@@ -1,3 +1,4 @@
+import {receiptSummary} from './receipt';
 import { apiUrl } from "./api";
 import { element } from "./review";
 
@@ -43,6 +44,8 @@ export async function openRecordedFile(id: string, path: string) {
       frame.setAttribute("sandbox", "allow-scripts");
       frame.srcdoc = `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; form-action 'none'; base-uri 'none'">${text}`;
       status.replaceWith(frame);
+    } else if(path.endsWith(".json")&&/\/(milestones|defacing|conversion|bids-validator)\//.test("/"+path)){
+      try{const value=JSON.parse(text);if(!value||typeof value!=="object"||Array.isArray(value))throw Error("Not an object");status.replaceWith(receiptSummary(value,path,text));}catch{status.replaceWith(element("pre",text));}
     } else status.replaceWith(element("pre", text));
   } catch (error) {
     if (dialog.isConnected) status.textContent = String(error);

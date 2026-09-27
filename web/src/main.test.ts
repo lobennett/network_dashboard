@@ -154,3 +154,29 @@ it('clears old source buttons before a new subject finishes loading',async()=>{
  expect(document.querySelector('#source-content')?.childElementCount).toBe(0);
  expect(document.querySelector('#subject-title')?.textContent).toBe('sub-s04');
 });
+
+it('can show the expected roster without any indexed subject',async()=>{
+ history.replaceState(null,'','/#overview');
+ vi.mocked(get).mockImplementation(async(path:string)=>{
+  if(path==='metadata')return {built_at:new Date().toISOString()};
+  if(path==='subjects')return [];
+  if(path==='overview')return {snapshot:{},expected_subjects:1,indexed_subjects:0,note:'Snapshot only',datasets:[],subjects:[{subject:'s10',indexed:false,status:'Not indexed',stages:{},flagged:0,review_required:0,preprocessing_excluded:0,task_excluded:0,source_skipped:0,jobs:[]}]};
+  throw Error(path);
+ });
+ await import('./main');
+ await vi.waitFor(()=>expect(document.querySelector('#overview-page')?.textContent).toContain('Not indexed'));
+});
+
+it('opens the affected scan from a validator issue link despite an old scan selection',async()=>{
+ history.replaceState(null,'','/?subject=s03&stage=current&scan=old&focus=sub-s03%2Fses-01%2Ffunc%2Fsub-s03_ses-01_task-rest_run-1_echo-2_bold.nii.gz#review');
+ vi.mocked(get).mockImplementation(async(path:string)=>{
+  if(path==='metadata')return {built_at:new Date().toISOString()};
+  if(path==='subjects')return [{subject:'s03'}];
+  if(path.endsWith('/completion'))return {checks:[],snapshot:{},subject:'s03',status:'incomplete'};
+  if(path.startsWith('artifacts?'))return [];
+  if(path==='subjects/s03')return {entities:[{entity_key:'old',namespace:'raw',subject:'s03',session:'01',task:'goNogo',run:'1',datatype:'func',suffix:'bold'},{entity_key:'rest',namespace:'raw',subject:'s03',session:'01',task:'rest',run:'1',datatype:'func',suffix:'bold'}],attempts:[],decisions:[],findings:[]};
+  throw Error(path);
+ });
+ await import('./main');
+ await vi.waitFor(()=>expect(new URL(location.href).searchParams.get('scan')).toBe('rest'));
+});

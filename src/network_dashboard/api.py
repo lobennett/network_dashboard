@@ -56,6 +56,21 @@ def create_app(index: Path, study: Path, web: Path | None = None, *, allowed_ori
         return {**value, "age_seconds": age, "stale": age is None or age > 900,
                 "conversion_links": conversion_links}
 
+    @app.get('/api/overview')
+    def overview():
+        from network_dashboard.overview import study_overview
+        with connect(index) as db:
+            return study_overview(db)
+
+    @app.get('/api/exclusions')
+    def exclusion_records(format: Literal['json','tsv'] = 'json'):
+        from network_dashboard.overview import exclusions, exclusions_tsv
+        with connect(index) as db:
+            value=exclusions(db)
+        if format=='tsv':
+            return Response(exclusions_tsv(value),media_type='text/tab-separated-values',headers={'Content-Disposition':'attachment; filename="network_exclusions.tsv"'})
+        return value
+
     @app.get("/api/subjects")
     def subjects():
         with connect(index) as db:

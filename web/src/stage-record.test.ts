@@ -37,3 +37,13 @@ it('keeps provenance collapsed and review exclusions visible',()=>{
  expect(panel.querySelector('.stage-changes')?.textContent).toContain('Timing issue');
  expect(panel.querySelector('.stage-changes')?.closest('details')).toBeNull();
 });
+
+it('exposes inputs, changes, outputs and review needs without opening provenance',()=>{
+ const record={stage:'review',subject:'s03',processing:[],inputs:[],outputs:[],findings:[{finding_type:'scan-review',evidence_json:'{"approval_required":"yes","approved":"no","flags":"high_motion"}'}],decisions:[],milestones:[],snapshot_kind:'recorded_stage_evidence',note:'',supporting_files:[{id:'receipt',path:'code/scan_decisions.tsv',dataset_id:'raw',content_id:'sha256:h',purpose:'Scan decisions'}]};
+ const open=vi.fn(),panel=stageReport(data,'review',record,open);
+ expect(panel.querySelector('.stage-overview')?.textContent).toContain('Inputs');
+ expect(panel.querySelector('.stage-overview')?.textContent).toContain('Outputs');
+ expect(panel.querySelector('.stage-check-summary')?.textContent).toContain('1 needs approval');
+ const button=Array.from(panel.querySelectorAll('button')).find(b=>b.textContent==='Scan decisions')!;
+ button.click();expect(open).toHaveBeenCalledWith(record.supporting_files[0]);
+});

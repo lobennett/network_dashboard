@@ -6,7 +6,7 @@ holds the canonical data; the dashboard uses a disposable local cache.
 With uv, SSH, and a Sherlock account with russpold Oak access:
 
 ```bash
-uvx --python 3.12 --from https://network-dashboard-devloganbennetts-projects.vercel.app/downloads/network_dashboard-0.6.1-py3-none-any.whl network-dashboard connect --ssh YOUR_SUNET_ID@login.sherlock.stanford.edu
+uvx --python 3.12 --from https://network-dashboard-devloganbennetts-projects.vercel.app/downloads/network_dashboard-0.8.0-py3-none-any.whl network-dashboard connect --ssh YOUR_SUNET_ID@login.sherlock.stanford.edu
 ```
 
 Complete authentication, leave the command running, and open the
@@ -14,22 +14,17 @@ Complete authentication, leave the command running, and open the
 Images and reports download when opened; restart the command to refresh records.
 No local DataLad installation is needed. See [setup](web/public/connect.html).
 
-Use **Stage history** to inspect each step’s inputs, outputs, exclusions and software.
-Use **Current files** for the latest inventory. Missing historical receipts remain
-unrecorded; current data are not substituted for earlier versions.
-Each subject has a preprocessing checklist with outstanding checks, evidence links
-and a JSON download. Successful processing and manual approval stay separate.
-**Data completeness** lists missing scan files, behavioral exceptions, per-run
-behavior metrics and first-level inputs, with a downloadable inventory.
-The **Pipeline guide** shows the source-to-fMRIPrep workflow and both approval gates;
-it opens without a data connection.
+**Study progress** shows every configured subject and recorded stage, with missing
+subjects marked “Not indexed.” It is a snapshot, not live Slurm status. **Exclusions**
+separates Flywheel skips, preprocessing drops and task-model exclusions; download
+the TSV for analysis handoff.
 
-NiiVue presets pair ribbon/anatomy, white/pial surfaces, fieldmap/magnitude, and
-T1w-space BOLD references/anatomy when matching files are available. Opacity controls
-help inspect boundaries. File history shows recorded changes from inputs to outputs,
-with technical records and the dependency tree expandable.
-Anatomy and surfaces require recorded defacing ancestry. Manual surface decisions
-remain in the pipeline’s review file; the dashboard never approves scans.
+**Review data** shows exact stage evidence and current supporting receipts separately.
+The events stage checks current behavior, event files and timing findings; B0 linkage
+checks each echo’s sidecar against its session fieldmap on request. Trim volumes
+shows pre/post reports and verified counts. Use **Current files** for the latest
+inventory, **Data completeness** for missing files, and the **Pipeline guide** for
+stage order. Images download when opened; restart the connector to refresh records.
 
 For an existing local DataLad clone, use `network-dashboard --study PATH --index PATH`.
 See [sharing](docs/sharing.md) for deployment and [analysis handoff](docs/analysis-handoff.md)

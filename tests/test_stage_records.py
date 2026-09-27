@@ -111,3 +111,15 @@ def test_b0_check_verifies_current_sidecars_without_claiming_stage_history(study
     target.write_text('{}')
     result=c.get('/api/subjects/s03/b0/bold').json()
     assert result['echoes'][0]['status']=='Unavailable'
+
+
+def test_shared_validation_receipt_is_supporting_evidence_not_a_bold_output(study):
+    with sqlite3.connect(study[1]) as db:
+        db.execute('CREATE TABLE artifact_observations (artifact_id TEXT,commit_hash TEXT,availability TEXT)')
+        db.execute("INSERT INTO artifacts VALUES (2,'sourcedata/raw','dataset:raw','dataset',NULL)")
+        db.execute("INSERT INTO artifact_versions VALUES ('receipt','raw','code/network_fmri/milestones/b0-fieldmaps-linked.json','sha256:receipt','{}')")
+        db.execute("INSERT INTO artifact_observations VALUES ('receipt','commit','available')")
+    value=client(study).get('/api/subjects/s03/stages/b0').json()
+    assert value['outputs']==[]
+    assert value['supporting_files'][0]['id']=='receipt'
+    assert client(study).get('/api/subjects/s03/stages/bids').json()['supporting_files']==[]

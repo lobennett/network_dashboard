@@ -83,7 +83,9 @@ def stage_record(db, study, subject, stage):
     scopes = {'review': {'preprocessing', 'task_first_level', 'timeseries'}, 'surfaces': {'surface'}, 'registration': {'output'}}.get(stage, set())
     decisions = [d for d in decisions if d['scope'] in scopes]
     milestones = [a for a in rows(db, "SELECT * FROM stage_attempts WHERE scope IN (?, 'dataset') OR scope LIKE ?", (f'sub-{subject}', f'sub-{subject}/%')) if a['stage'] in PRODUCERS[stage]]
+    supporting_files = stage_supporting_files(files, current_ids, roots, study, subject, stage)
     return {'stage': stage, 'subject': subject, 'processing': processing,
+            'supporting_files': supporting_files,
             'inputs': input_files, 'outputs': output_files, 'findings': findings,
             'decisions': decisions, 'milestones': milestones,
             'snapshot_kind': 'recorded_stage_evidence',
@@ -100,3 +102,35 @@ def global_signal_label(root, path):
         if root.name == f'gs-{label}' or relative.parts == ('derivatives', f'gs-{label}', relative.name):
             return label
     return None
+
+
+def stage_supporting_files(files, current_ids, roots, study, subject, stage):
+    """Offer named current receipts separately from historical image outputs."""
+    from pathlib import PurePosixPath
+    result=[]
+    for file in files:
+        if file['id'] not in current_ids or not file['path'].endswith(('.json','.tsv','.txt','.log','.html')):
+            continue
+        root=roots.get(file['dataset_id'])
+        if root is None:
+            continue
+        path=PurePosixPath(file['path']);name=path.name
+        belongs=False;purpose=''
+        # Shared milestones name the producer exactly; they are dataset-wide evidence.
+        if file['path'].startswith('code/network_fmri/milestones/') and name[:-5] in PRODUCERS[stage] and name.endswith('.json'):
+            belongs=True;purpose='Dataset milestone receipt'
+        if stage=='bids' and name==f'sub-{subject}.json' and '/network_fw2bids/' in '/'+file['path']:
+            belongs=True;purpose='Defacing receipt' if 'defacing' in path.parts else 'Conversion receipt'
+        if stage=='events' and name in {'behavioral_exceptions.tsv','analysis_exclusions.tsv','participants.tsv','participants.json'}:
+            belongs=True;purpose='Behavioral exceptions' if 'exceptions' in name else 'Analysis exclusions' if 'exclusions' in name else 'Participant metadata'
+        if stage=='b0' and (root.name=='bids-validator' or path.parts[:2]==('derivatives','bids-validator')) and name in {'desc-precuration_validation.json','desc-precuration_validation.log'}:
+            belongs=True;purpose='BIDS validator report'
+        if stage=='review' and name in {'scan_decisions.tsv','analysis_exclusions.tsv'}:
+            belongs=True;purpose='Scan decisions' if name=='scan_decisions.tsv' else 'Analysis exclusions'
+        if stage=='surfaces' and name=='surface_review.tsv':
+            belongs=True;purpose='Surface review decisions'
+        if stage=='review' and (root.name=='bids-validator' or path.parts[:2]==('derivatives','bids-validator')) and name in {'desc-curated_validation.json','desc-curated_validation.log'}:
+            belongs=True;purpose='Curated BIDS validator report'
+        if belongs:
+            result.append({**file,'purpose':purpose,'stage_basis':'current_supporting_record'})
+    return sorted(result,key=lambda f:(f['purpose'],f['path']))

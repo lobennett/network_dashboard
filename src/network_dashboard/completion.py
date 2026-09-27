@@ -171,10 +171,18 @@ def subject_completion(db, subject):
         ),
     )
     milestone(
+        "b0", "B0 fieldmap linkage", "b0-fieldmaps-linked", "b0",
+        "Recorded linking milestone. Use Check links to verify current sidecar identifiers per scan.",
+    )
+    milestone(
+        "precuration-validation", "Prepared BIDS validation", "bids-precuration-validated", "b0",
+        "Validation after B0 linking, before MRIQC and FreeSurfer.",
+    )
+    milestone(
         "validation",
         "Curated BIDS validation",
         "bids-curated-validated",
-        "events",
+        "review",
         "Recorded validator milestone; inspect the report for warnings and issues.",
     )
     checks[-1]["evidence"] += evidence(

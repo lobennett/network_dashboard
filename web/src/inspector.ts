@@ -94,12 +94,14 @@ export class ScanInspector {
           }
         : {
             TRs: m.tr_count??m.size_t,
+            "Standardized DVARS": m.dvars_std===undefined?undefined:Number(m.dvars_std).toFixed(3),
+            "Observed echoes": m.observed_echoes,
             "Mean FD (mm)":
               m.fd_mean === undefined
                 ? undefined
                 : Number(m.fd_mean).toFixed(3),
             "FD > 0.5 mm (%)":
-              m.fd_thres === "0.5" && m.fd_perc !== undefined
+              Number(m.fd_thres) === 0.5 && m.fd_perc !== undefined
                 ? Number(m.fd_perc).toFixed(1)
                 : undefined,
           };
