@@ -4,12 +4,14 @@ import { get, apiUrl } from "./api";
 import { element, type RecordRow } from "./review";
 import { renderScans, scanForDestination } from "./scans";
 import { flywheelInventory } from "./flywheel";
-import { stageReport, stageSubject, type StageRecord } from "./stage-record";
+import { stageReport, stageSubject, type StageRecord, type StageFile } from "./stage-record";
 import { rawScans, scanOutcome, stages, type Subject, type Stage } from "./pipeline";
 import { ScanInspector } from "./inspector";
 import { initialScan, subjectSummary, reviewControls } from "./review-layout";
 import { pipelineGuide } from "./pipeline-guide";
 import { renderCoverage, type Coverage, type CoverageScan } from "./coverage";
+import {trimPanel,type TrimSummary} from "./trim";
+import {openRecordedFile} from "./document";
 import { completionChecklist, type Completion } from "./completion";
 
 const app = document.querySelector<HTMLDivElement>("#app")!;
@@ -64,12 +66,18 @@ function chooseStage(stage: Stage, preferred?:RecordRow) {
   if (!data) return;
   rememberSelection();
   inspector.clear();
+  const openStageFile=(file:StageFile,trace?:boolean)=>{
+    if(!trace&&/\.(pdf|tsv|json|html|txt|csv)$/i.test(file.path)){void openRecordedFile(file.id,file.path);return;}
+    document.querySelector<HTMLElement>(".review-workspace")!.hidden=false;
+    void inspector.showArtifact(file,stage,trace);
+    find("inspector").scrollIntoView({block:"start"});
+  };
   find("scan-list").replaceChildren(element("p","Loading stage records…","muted"));
   find("scan-counts").textContent="";
   find("notice").textContent="";
   find("workflow").replaceChildren(reviewControls(stage, chooseStage, data));
-  find("stage-detail").replaceChildren(stageReport(data,stage,undefined,(file,trace)=>inspector.showArtifact(file,stage,trace)));
-  document.querySelector<HTMLElement>(".review-workspace")!.hidden = stage === "source";
+  find("stage-detail").replaceChildren(stageReport(data,stage,undefined,openStageFile));
+  document.querySelector<HTMLElement>(".review-workspace")!.hidden = (stage === "source" || stage === "trim");
   find("source-content").replaceChildren();
   const subjectOutputs=stage==="surfaces"||stage==="registration";
   document.querySelector(".review-workspace")!.classList.toggle("subject-outputs",subjectOutputs);
@@ -83,7 +91,7 @@ function chooseStage(stage: Stage, preferred?:RecordRow) {
     rememberSelection();
     refreshScanList();
     const selection=subjectOutputs?data.entities.find(e=>e.subject):selectedScan;
-    if(selection&&stage!=="source")void inspector.show(stageData(data),selection,stage);
+    if(selection&&stage!=="source"&&stage!=="trim")void inspector.show(stageData(data),selection,stage);
     const outcomes=rawScans(stageData(data)).map(scan=>scanOutcome(stageData(data!),scan));
     find("scan-counts").textContent=["current","review"].includes(stage)?`${outcomes.filter(o=>o.pending).length} need review / ${outcomes.filter(o=>o.flagged).length} flagged`:"Stage-specific files and evidence";
   };
@@ -93,12 +101,19 @@ function chooseStage(stage: Stage, preferred?:RecordRow) {
     if(!data||current!==stageRequest)return;
     if(record.snapshot_kind!=="recorded_stage_evidence")throw new Error("Stage records require connector 0.7.0 or newer.");
     stageRecord=record;
-    find("stage-detail").replaceChildren(stageReport(data,stage,record,(file,trace)=>inspector.showArtifact(file,stage,trace)));
+    find("stage-detail").replaceChildren(stageReport(data,stage,record,openStageFile));
     if(stage==="source")find("source-content").append(flywheelInventory(stageData(data),prefix=>{
       const scan=scanForDestination(rawScans(data!),prefix);
       if(scan){chooseStage("bids",scan);}
       else find("notice").textContent="The planned destination has no indexed BIDS scan. Its source record remains available here.";
     }));
+    if(stage==='trim'){
+      const host=element('div');find('source-content').append(host);host.append(element('p','Loading pre/post global-signal counts…','muted'));
+      void get<TrimSummary>(`subjects/${encodeURIComponent(subject)}/trim`).then(summary=>{
+        if(current!==stageRequest)return;
+        host.replaceChildren(trimPanel(summary,file=>void openRecordedFile(file.id,file.path)));
+      }).catch(error=>{if(current===stageRequest)host.replaceChildren(element('p',`Trimming summary unavailable: ${error}. Restart with connector 0.7.1 or newer.`,'gap'));});
+    }
     update();
   }).catch(error=>{
     if(current!==stageRequest)return;

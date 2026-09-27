@@ -91,6 +91,16 @@ def create_app(index: Path, study: Path, web: Path | None = None, *, allowed_ori
         with connect(index) as db:
             return subject_completion(db, subject)
 
+    @app.get('/api/subjects/{subject}/trim')
+    def subject_trim(subject: str):
+        from network_dashboard.trim import trim_summary
+        if not re.fullmatch(r'[A-Za-z0-9]+', subject):
+            raise HTTPException(404, 'Unknown subject')
+        with connect(index) as db:
+            if not db.execute('SELECT 1 FROM entities WHERE subject=?', (subject,)).fetchone():
+                raise HTTPException(404, 'Unknown subject')
+            return trim_summary(db, study, subject, fetcher)
+
     @app.get("/api/subjects/{subject}/stages/{stage}")
     def subject_stage(subject: str, stage: Stage):
         if not re.fullmatch(r"[A-Za-z0-9]+", subject):

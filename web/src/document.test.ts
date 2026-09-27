@@ -50,3 +50,11 @@ it("renders recorded text without interpreting markup", async () => {
   );
   expect(document.querySelector("script")).toBeNull();
 });
+it('previews PDF bytes as a PDF with a download fallback',async()=>{
+ Object.defineProperty(HTMLDialogElement.prototype,'showModal',{value:vi.fn(),configurable:true});
+ vi.stubGlobal('fetch',vi.fn().mockResolvedValue({ok:true,blob:async()=>new Blob(['%PDF-1.7'],{type:'application/pdf'})}));
+ URL.createObjectURL=vi.fn(()=> 'blob:pdf');URL.revokeObjectURL=vi.fn();
+ await openRecordedFile('pdf','gs.pdf');
+ expect(document.querySelector('object')?.getAttribute('type')).toBe('application/pdf');
+ expect(document.querySelector('a')?.download).toBe('gs.pdf');
+});

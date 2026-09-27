@@ -40,3 +40,29 @@ def test_dataset_wide_attempt_only_shows_inputs_for_this_subject(study):
     value=client(study).get('/api/subjects/s03/stages/bids').json()
     assert {f['id'] for f in value['inputs']}=={'ours-in','shared'}
     assert {f['id'] for f in value['outputs']}=={'ours-out'}
+
+
+def test_trim_summary_uses_verified_global_signal_tables_not_mriqc(study):
+    import hashlib
+    root,index=study
+    with sqlite3.connect(index) as db:
+        db.execute('CREATE TABLE artifact_observations (artifact_id TEXT,commit_hash TEXT,availability TEXT)')
+        for label,n in [('pretrim',100),('posttrim',93)]:
+            path=root/f'derivatives/gs-{label}/gs_metrics.tsv'
+            path.parent.mkdir(parents=True)
+            path.write_text(f'subject\tsession\ttask\trun\tn_volumes\nsub-s03\tses-11\tstopSignalWDirectedForgetting\t1\t{n}\nsub-s04\tses-11\trest\t1\t999\n')
+            identity=label
+            db.execute('INSERT INTO artifact_versions VALUES (?,?,?,?,?)',(identity,'study',path.relative_to(root).as_posix(),'sha256:'+hashlib.sha256(path.read_bytes()).hexdigest(),'{}'))
+            db.execute('INSERT INTO artifact_observations VALUES (?,?,?)',(identity,'commit','available'))
+    response=client(study).get('/api/subjects/s03/trim')
+    assert response.status_code==200
+    result=response.json()
+    assert len(result['scans'])==1
+    assert result['scans'][0]['before']==100
+    assert result['scans'][0]['after']==93
+    assert result['scans'][0]['removed']==7
+    assert {f['id'] for f in client(study).get('/api/subjects/s03/stages/trim').json()['outputs']}=={'pretrim','posttrim'}
+    (root/'derivatives/gs-pretrim/gs_metrics.tsv').write_text('tampered')
+    result=client(study).get('/api/subjects/s03/trim').json()
+    assert result['scans'][0]['before'] is None
+    assert result['errors']

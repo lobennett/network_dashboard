@@ -6,10 +6,12 @@ export async function openRecordedFile(id: string, path: string) {
   const dialog = element("dialog", "", "document-preview");
   const close = element("button", "Close report");
   const status = element("p", "Loading…");
+  let blobUrl: string | undefined;
   const controller = new AbortController();
   close.onclick = () => dialog.close();
   dialog.onclose = () => {
     controller.abort();
+    if(blobUrl)URL.revokeObjectURL(blobUrl);
     dialog.remove();
   };
   dialog.append(close, element("h2", path.split("/").pop()), status);
@@ -25,6 +27,14 @@ export async function openRecordedFile(id: string, path: string) {
     );
     if (!response.ok)
       throw new Error((await response.json()).detail ?? "File unavailable");
+    if(path.endsWith('.pdf')){
+      const blob=await response.blob();
+      if(!dialog.isConnected)return;
+      blobUrl=URL.createObjectURL(new Blob([blob],{type:'application/pdf'}));
+      const download=element('a','Download PDF');download.href=blobUrl;download.download=path.split('/').pop()??'report.pdf';
+      const object=element('object');object.setAttribute('type','application/pdf');object.setAttribute('data',blobUrl);object.setAttribute('aria-label',download.download);object.append(element('p','PDF preview unavailable. Use Download PDF.'));
+      status.replaceWith(download,object);return;
+    }
     const text = await response.text();
     if (!dialog.isConnected) return;
     if (path.endsWith(".html")) {

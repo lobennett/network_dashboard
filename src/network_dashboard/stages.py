@@ -65,6 +65,11 @@ def stage_record(db, study, subject, stage):
     seen = {f['id'] for f in output_files}
     for file in files:
         root = roots.get(file['dataset_id'])
+        if stage == 'trim' and root and file['id'] in current_ids and global_signal_label(root, file['path']):
+            if file['id'] not in seen:
+                output_files.append({**file, 'stage_basis': 'current_stage_dataset'})
+                seen.add(file['id'])
+            continue
         if not root or not owned(root) or file['id'] not in current_ids or not pattern.search(file['path']):
             continue
         if active_path and not str(root.relative_to(study)).startswith(active_path):
@@ -82,3 +87,15 @@ def stage_record(db, study, subject, stage):
             'decisions': decisions, 'milestones': milestones,
             'snapshot_kind': 'recorded_stage_evidence',
             'note': 'Recorded transformations identify exact file versions. Current derivative files are labeled separately. A complete historical checkout is not implied; absent records remain unknown.'}
+
+
+def global_signal_label(root, path):
+    """Recognize only the two dedicated global-signal derivative directories."""
+    from pathlib import PurePosixPath
+    relative = PurePosixPath(path)
+    if relative.name not in {'gs_metrics.tsv', 'gs.pdf'}:
+        return None
+    for label in ('pretrim', 'posttrim'):
+        if root.name == f'gs-{label}' or relative.parts == ('derivatives', f'gs-{label}', relative.name):
+            return label
+    return None
