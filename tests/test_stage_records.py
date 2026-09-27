@@ -76,3 +76,38 @@ def test_b0_linkage_has_its_own_stage_not_events(study):
     assert response.status_code==200
     assert response.json()['processing'][0]['stage']=='b0-fieldmaps-linked'
     assert c.get('/api/subjects/s03/stages/events').json()['processing']==[]
+
+
+def test_b0_check_verifies_current_sidecars_without_claiming_stage_history(study):
+    import hashlib
+    root,index=study
+    from network_dashboard.records import dataset_roots,connect
+    with connect(index) as db:
+        dataset=next(iter(dataset_roots(db,root).items()))
+    dataset_id,directory=dataset
+    with sqlite3.connect(index) as db:
+        db.execute("INSERT INTO artifacts VALUES (1,'sourcedata/raw',?,'dataset',NULL)",('dataset:'+dataset_id,))
+        db.execute('CREATE TABLE artifact_observations (artifact_id TEXT,commit_hash TEXT,availability TEXT)')
+        directory=root/'sourcedata/raw'
+        for name,value in [('func/sub-s03_ses-11_task-rest_run-1_echo-2_bold.json',{'B0FieldSource':'ses11'}),('fmap/sub-s03_ses-11_fieldmap.json',{'B0FieldIdentifier':'ses11'})]:
+            path='sub-s03/ses-11/'+name
+            target=directory/path;target.parent.mkdir(parents=True,exist_ok=True);target.write_text(json.dumps(value))
+            identity='bold' if '/func/' in path else 'fmap'
+            db.execute('INSERT INTO artifact_versions VALUES (?,?,?,?,?)',(identity,dataset_id,path,'sha256:'+hashlib.sha256(target.read_bytes()).hexdigest(),'{}'))
+            db.execute('INSERT INTO artifact_observations VALUES (?,?,?)',(identity,'commit','available'))
+    c=client(study)
+    inventory=c.get('/api/subjects/s03/b0').json()
+    assert inventory['basis']=='Current checksum-verified sidecars; not a historical stage snapshot.'
+    assert len(inventory['scans'])==1
+    result=c.get('/api/subjects/s03/b0/bold').json()
+    assert result['echoes'][0]['status']=='Matched'
+    assert result['echoes'][0]['source']==['ses11']
+    fmap=directory/'sub-s03/ses-11/fmap/sub-s03_ses-11_fieldmap.json'
+    fmap.write_text(json.dumps({'B0FieldIdentifier':'another-session'}))
+    with sqlite3.connect(index) as db:
+        db.execute('UPDATE artifact_versions SET content_id=? WHERE id=?',('sha256:'+hashlib.sha256(fmap.read_bytes()).hexdigest(),'fmap'))
+    assert c.get('/api/subjects/s03/b0/bold').json()['echoes'][0]['status']=='No matching fieldmap'
+    target=directory/'sub-s03/ses-11/func/sub-s03_ses-11_task-rest_run-1_echo-2_bold.json'
+    target.write_text('{}')
+    result=c.get('/api/subjects/s03/b0/bold').json()
+    assert result['echoes'][0]['status']=='Unavailable'

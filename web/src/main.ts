@@ -1,3 +1,4 @@
+import {b0Panel,type B0Inventory,type B0Check} from './b0';
 import "./styles.css";
 import "./layout.css";
 import { get, apiUrl } from "./api";
@@ -69,7 +70,7 @@ function chooseStage(stage: Stage, preferred?:RecordRow) {
   const openStageFile=(file:StageFile,trace?:boolean)=>{
     if(!trace&&/\.(pdf|tsv|json|html|txt|csv)$/i.test(file.path)){void openRecordedFile(file.id,file.path);return;}
     document.querySelector<HTMLElement>(".review-workspace")!.hidden=false;
-    void inspector.showArtifact(file,stage,trace);
+    void inspector.showArtifact(file,stage==="b0"&&!trace?"current":stage,trace);
     find("inspector").scrollIntoView({block:"start"});
   };
   find("scan-list").replaceChildren(element("p","Loading stage records…","muted"));
@@ -77,7 +78,7 @@ function chooseStage(stage: Stage, preferred?:RecordRow) {
   find("notice").textContent="";
   find("workflow").replaceChildren(reviewControls(stage, chooseStage, data));
   find("stage-detail").replaceChildren(stageReport(data,stage,undefined,openStageFile));
-  document.querySelector<HTMLElement>(".review-workspace")!.hidden = (stage === "source" || stage === "trim");
+  document.querySelector<HTMLElement>(".review-workspace")!.hidden = (stage === "source" || stage === "trim" || stage === "b0");
   find("source-content").replaceChildren();
   const subjectOutputs=stage==="surfaces"||stage==="registration";
   document.querySelector(".review-workspace")!.classList.toggle("subject-outputs",subjectOutputs);
@@ -91,7 +92,7 @@ function chooseStage(stage: Stage, preferred?:RecordRow) {
     rememberSelection();
     refreshScanList();
     const selection=subjectOutputs?data.entities.find(e=>e.subject):selectedScan;
-    if(selection&&stage!=="source"&&stage!=="trim")void inspector.show(stageData(data),selection,stage);
+    if(selection&&stage!=="source"&&stage!=="trim"&&stage!=="b0")void inspector.show(stageData(data),selection,stage);
     const outcomes=rawScans(stageData(data)).map(scan=>scanOutcome(stageData(data!),scan));
     find("scan-counts").textContent=["current","review"].includes(stage)?`${outcomes.filter(o=>o.pending).length} need review / ${outcomes.filter(o=>o.flagged).length} flagged`:"Stage-specific files and evidence";
   };
@@ -107,6 +108,13 @@ function chooseStage(stage: Stage, preferred?:RecordRow) {
       if(scan){chooseStage("bids",scan);}
       else find("notice").textContent="The planned destination has no indexed BIDS scan. Its source record remains available here.";
     }));
+    if(stage==='b0'){
+      const host=element('div');find('source-content').append(host);host.append(element('p','Loading B0 scan inventory…','muted'));
+      void get<B0Inventory>(`subjects/${encodeURIComponent(subject)}/b0`).then(value=>{
+        if(current!==stageRequest)return;
+        host.replaceChildren(b0Panel(value,id=>get<B0Check>(`subjects/${encodeURIComponent(subject)}/b0/${encodeURIComponent(id)}`),file=>void openRecordedFile(file.id,file.path),file=>openStageFile(file)));
+      }).catch(error=>{if(current===stageRequest)host.replaceChildren(element('p',`B0 checks unavailable: ${error}. Restart with connector 0.7.3 or newer.`,'gap'));});
+    }
     if(stage==='trim'){
       const host=element('div');find('source-content').append(host);host.append(element('p','Loading pre/post global-signal counts…','muted'));
       void get<TrimSummary>(`subjects/${encodeURIComponent(subject)}/trim`).then(summary=>{

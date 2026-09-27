@@ -69,6 +69,22 @@ def create_app(index: Path, study: Path, web: Path | None = None, *, allowed_ori
         with connect(index) as db:
             return study_coverage(db, subject)
 
+    @app.get('/api/subjects/{subject}/b0')
+    def b0_inventory(subject: str):
+        from network_dashboard.b0 import inventory
+        if not re.fullmatch(r'[A-Za-z0-9]+', subject):
+            raise HTTPException(404, 'Unknown subject')
+        with connect(index) as db:
+            return inventory(db, subject)
+
+    @app.get('/api/subjects/{subject}/b0/{scan_id}')
+    def b0_check(subject: str, scan_id: str):
+        from network_dashboard.b0 import check
+        if not re.fullmatch(r'[A-Za-z0-9]+', subject):
+            raise HTTPException(404, 'Unknown subject')
+        with connect(index) as db:
+            return check(db, study, subject, scan_id, fetcher)
+
     @app.get("/api/subjects/{subject}")
     def subject_detail(subject: str):
         if not re.fullmatch(r"[A-Za-z0-9]+", subject):
