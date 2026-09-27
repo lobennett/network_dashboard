@@ -1,5 +1,5 @@
 import { element, details, type RecordRow } from './review';
-import { reviewMetrics, humanize, type Stage, type Subject } from './pipeline';
+import { stages, reviewMetrics, humanize, type Stage, type Subject } from './pipeline';
 import { acquisitionRecords } from './flywheel';
 import { scanPrefix } from './scans';
 export type StageFile = {id:string;path:string;dataset_id:string;content_id:string;stage_basis?:string};
@@ -48,32 +48,31 @@ function softwareText(software:unknown):string {
 export function stageReport(data:Subject,stage:Stage,record:StageRecord|undefined,open:(file:StageFile,trace?:boolean)=>void):HTMLElement {
  const panel=element('section','','stage-report'), method=stageMethods[stage];
  const overview=element('div','','stage-overview');
- overview.append(element('h2',stage==='current'?'Current files and decisions':'What happened at this stage'),element('p',method.change));
+ overview.append(element('h2',stage==='current'?'Current files':stages.find(s=>s.id===stage)?.title??stage),element('p',method.change));
  const io=element('dl','','stage-io');
  for(const [key,value] of [['Inputs',method.inputs],['Outputs',method.outputs],['Configured tools',method.tools]])io.append(element('dt',key),element('dd',value));
- overview.append(io);panel.append(overview);
- if(record){const download=element('button','Download stage record (JSON)','text-button');download.onclick=()=>{const url=URL.createObjectURL(new Blob([JSON.stringify(record,null,2)],{type:'application/json'}));const link=element('a');link.href=url;link.download=`sub-${record.subject}_${stage}_record.json`;link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};overview.append(download);} 
- if(stage==='current')return panel;
+ const supporting=element('details','','stage-supporting');supporting.append(element('summary','Methods and provenance'),io);panel.append(overview);
+ if(record){const download=element('button','Download stage record (JSON)','text-button');download.onclick=()=>{const url=URL.createObjectURL(new Blob([JSON.stringify(record,null,2)],{type:'application/json'}));const link=element('a');link.href=url;link.download=`sub-${record.subject}_${stage}_record.json`;link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};supporting.append(download);}
+ if(stage==='current'){panel.append(supporting);return panel;}
  if(!record){panel.append(element('p','Loading recorded stage evidence…','muted'));return panel;}
  const versions=element('details','','software-records');versions.append(element('summary','Executed software and parameters'));
  for(const p of record.processing){const text=softwareText(p.software);const item=element('details');item.append(element('summary',`${humanize(p.stage)} · ${p.scope??"Scope unrecorded"} — ${text}`),details(p));versions.append(item);}
  if(!record.processing.length)versions.append(element('p','Execution versions unrecorded. Configured tools above describe the workflow, not proof of an execution.','muted'));
- panel.append(versions);
- const changes=element('section','','stage-changes');changes.append(element('h3','Exclusions and flags'));
+ supporting.append(versions);
+ const changes=element('section','','stage-changes');changes.append(element('h3','Review and exclusions'));
  if(stage==='source'){
-  const rows=acquisitionRecords(data),historical=rows.length>0&&rows.every(r=>r.snapshot_kind==='conversion_selection');
-  changes.append(element('p',rows.length?`${rows.filter(r=>r.decision==='selected').length} selected / ${rows.filter(r=>r.decision==='skipped').length} not selected in the ${historical?'conversion selection':'current Flywheel audit'}. Reasons are listed below.`:'Source selection unrecorded; upstream exclusions are unknown.'));
+  if(!acquisitionRecords(data).length)changes.append(element('p','Source selection unrecorded; upstream exclusions are unknown.','gap'));
  }else if(stage==='review'){
   const flagged=record.findings.filter(f=>{try{return Boolean(JSON.parse(String(f.evidence_json)).flags);}catch{return false;}});
   const exclusions=record.decisions.filter(d=>['drop','exclude'].includes(String(d.decision)));
-  changes.append(element('p',`${flagged.length} flagged review rows. ${exclusions.length} recorded exclusion decisions.`));
+  changes.append(element('p',`${flagged.length} flagged review rows. ${exclusions.length} recorded exclusion${exclusions.length===1?'':'s'}.`));
   for(const d of exclusions){const e=data.entities.find(e=>e.entity_key===d.entity_key);const block=element('div','','exclusion-row');block.append(element('strong',e?`${scanPrefix(e)} ${e.suffix}`:String(d.entity_key)),element('p',`${d.scope==='task_first_level'?'Task models only — BOLD retained unless separately dropped':d.scope==='preprocessing'?'Excluded from preprocessing':humanize(d.scope)}: ${d.reason??'Reason unrecorded'}${d.reviewer?` · ${d.reviewer}`:''}`));changes.append(block);}
   if(!record.findings.length&&!record.decisions.length)changes.append(element('p','Review decisions unrecorded; no retention or exclusion can be inferred.','gap'));
  }else if(stage==='mriqc')changes.append(element('p','MRIQC produces metrics and reports. Scan exclusions belong to Scan review.'));
  else if(stage==='events')changes.append(element('p',`${record.findings.length} behavioral timing findings recorded. Task-model decisions belong to Scan review.`));
  else if(stage==='trim')changes.append(element('p','Volumes are removed, not whole scans. Actual removal counts require a recorded trimming receipt.'));
- else changes.append(element('p','This stage does not decide scan exclusions. See Flywheel for source selection and Scan review for preprocessing and task-model decisions.'));
- panel.append(changes);
+ else if(!record.outputs.length)changes.append(element('p','Historical files unrecorded. Use Current files for the latest inventory.','gap'));
+ if(changes.children.length>1)panel.append(changes);
  if(stage==='surfaces'||stage==='registration'){
   const approvals=element('section','','stage-approvals');approvals.append(element('h3',stage==='registration'?'Final output decisions':'Surface decisions'));
   if(!record.decisions.length)approvals.append(element('p','Approval unrecorded.','muted'));
@@ -87,17 +86,17 @@ export function stageReport(data:Subject,stage:Stage,record:StageRecord|undefine
    for(const file of record.outputs.slice(0,100)){const row=element('div','','stage-file-row'),button=element('button',file.path,'text-button');button.onclick=()=>open(file);row.append(button,element('small',file.stage_basis==='recorded_transformation'?'Exact transformation output':'Current stage derivative'));files.append(row);}
    if(record.outputs.length>100)files.append(element('p',`Showing the first 100 of ${record.outputs.length} files. Select a scan below to narrow the list.`,'muted'));
   }
-  panel.append(files);
+  supporting.append(files);
   const inputs=element('details','','stage-input-files');inputs.append(element('summary',`Recorded inputs (${record.inputs.length} file versions)`));
   if(!record.inputs.length)inputs.append(element('p','Exact input file links unrecorded. The workflow inputs above describe the expected data.','muted'));
   for(const file of record.inputs.slice(0,100)){const button=element('button',file.path,'text-button');button.title='Trace input history; original source images are not previewed here';button.onclick=()=>open(file,true);inputs.append(button);}
   if(record.inputs.length>100)inputs.append(element('p','Showing the first 100 inputs. Download the stage record for the complete list.','muted'));
-  panel.append(inputs);
+  supporting.append(inputs);
  }
  const evidence=element('details','','stage-evidence');evidence.append(element('summary',`Evidence and processing records (${record.findings.length} findings / ${record.milestones.length} milestones)`));
  for(const f of record.findings.filter(f=>f.finding_type!=='flywheel-acquisition').slice(0,100))evidence.append(evidenceCard(f));
  for(const row of record.milestones){const card=element('details');card.append(element('summary',`${humanize(row.stage)}: ${humanize(row.state)}`),details(row));evidence.append(card);}
- panel.append(evidence);return panel;
+ supporting.append(evidence);panel.append(supporting);return panel;
 }
 
 export function stageSubject(data:Subject,stage:Stage,record?:StageRecord):Subject {

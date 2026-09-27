@@ -29,3 +29,11 @@ it('only lists scans with evidence at the selected stage',async()=>{
  expect(stageSubject(scans,'bids',record).entities.map(e=>e.entity_key)).toEqual(['fmap']);
  expect(stageSubject(scans,'current').entities).toHaveLength(2);
 });
+
+it('keeps provenance collapsed and review exclusions visible',()=>{
+ const record={stage:'review',subject:'s03',processing:[],inputs:[],outputs:[],findings:[],decisions:[{entity_key:'scan',decision:'exclude',scope:'task_first_level',reason:'Timing issue',reviewer:'LB'}],milestones:[],snapshot_kind:'recorded_stage_evidence',note:''};
+ const panel=stageReport(data,'review',record,vi.fn());
+ expect(panel.querySelector<HTMLDetailsElement>('.stage-supporting')?.open).toBe(false);
+ expect(panel.querySelector('.stage-changes')?.textContent).toContain('Timing issue');
+ expect(panel.querySelector('.stage-changes')?.closest('details')).toBeNull();
+});

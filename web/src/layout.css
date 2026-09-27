@@ -463,3 +463,20 @@ header {
 .review-controls { display: block; }
 .stage-navigation { width: 100%; }
 .stage-parallel-note { max-width: none; }
+
+/* Quiet navigation: one compact strip, with details revealed on demand. */
+.stage-navigation { display:flex; flex-wrap:wrap; border:0; gap:4px; margin:16px 0 0; }
+.stage-navigation button { padding:9px 12px; border:1px solid transparent; border-bottom:2px solid var(--rule); font-size:12px; }
+.stage-navigation button:hover { background:#f5f5f4; border-bottom-color:var(--cardinal); }
+.stage-navigation button[aria-current="step"] { background:#faf1f1; color:var(--cardinal); border-bottom-color:var(--cardinal); font-weight:700; }
+.stage-navigation button:last-child { margin-left:auto; border:1px solid var(--rule); border-radius:4px; }
+.stage-report { border-top:0; padding:14px 0 12px; }
+.stage-overview > p { margin:6px 0 12px; }
+.stage-supporting { color:var(--muted); }
+.stage-supporting[open] { color:var(--ink); }
+.subject-status { margin:8px 0; font-size:13px; color:var(--muted); }
+.subject-status > summary { cursor:pointer; }
+.stage-changes { margin:8px 0; }
+.stage-changes > h3 { margin-top:8px; }
+.stage-changes > p { margin:4px 0; }
+@media(max-width:650px) { .stage-navigation { flex-wrap:nowrap; overflow-x:auto; padding-bottom:4px; } .stage-navigation button { flex:0 0 auto; } .stage-navigation button:last-child { margin-left:8px; } }

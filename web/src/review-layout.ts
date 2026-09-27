@@ -38,15 +38,14 @@ export function subjectSummary(data: Subject): HTMLElement {
 }
 export function reviewControls(active:Stage,select:(stage:Stage)=>void,data?:Subject):HTMLElement {
   const panel=element('div','','review-controls');
-  const modes=element('nav','','review-modes');modes.setAttribute('aria-label','Data views');
-  for(const [title,stage] of [['Stage history',active==='current'?'source':active],['Current files','current']] as const){
-    const button=element('button',title);button.setAttribute('aria-pressed',String((stage==='current')===(active==='current')));button.onclick=()=>select(stage);modes.append(button);
+  const steps=element('nav','','stage-navigation');steps.setAttribute('aria-label','Processing steps and current files');
+  for(const stage of [...stages,{id:'current' as const,title:'Current files'}]){
+    const button=element('button');button.append(element('span',stage.title));
+    button.setAttribute('aria-current',active===stage.id?'step':'false');
+    button.title=stage.id==='current'?'Latest available files':data?stageStatus(stage.id,data.attempts):stage.title;
+    button.onclick=()=>select(stage.id);steps.append(button);
   }
-  panel.append(modes);
-  if(active!=='current'){
-    const steps=element('nav','','stage-navigation');steps.setAttribute('aria-label','Subject pipeline stages');
-    stages.forEach((stage,i)=>{const button=element('button');button.append(element('span',String(i+1),'stage-number'),element('span',stage.title));if(data)button.append(element('small',stage.id==='source'&&data.findings.some(f=>f.finding_type==='flywheel-acquisition')?'Audit available':stageStatus(stage.id,data.attempts),'stage-state'));button.setAttribute('aria-current',active===stage.id?'step':'false');button.onclick=()=>select(stage.id);steps.append(button);});
-    panel.append(steps,element('p','FreeSurfer runs alongside MRIQC. Scan and surface approval both precede fMRIPrep.','stage-parallel-note'));
-  }
+  panel.append(steps);
+  requestAnimationFrame(()=>{const selected=steps.querySelector<HTMLElement>('[aria-current="step"]');if(selected&&steps.scrollWidth>steps.clientWidth)steps.scrollLeft=Math.max(0,selected.offsetLeft-steps.offsetLeft-16);});
   return panel;
 }

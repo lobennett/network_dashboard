@@ -39,3 +39,10 @@ it("does not describe absent reviews as approved", () => {
   expect(subjectSummary(data).textContent).toContain("Unrecorded");
   expect(subjectSummary(data).textContent).not.toContain("Approved");
 });
+
+it("keeps processing steps visible when browsing current files",()=>{
+ const controls=reviewControls('current',vi.fn());
+ expect(controls.querySelectorAll('button')).toHaveLength(10);
+ expect(controls.querySelector('[aria-current="step"]')?.textContent).toBe('Current files');
+ expect(controls.textContent).not.toContain('Stage history');
+});

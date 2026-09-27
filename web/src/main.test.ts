@@ -23,8 +23,8 @@ it("waits for a connection click before accessing the local network", async () =
   await import("./main");
   expect(get).not.toHaveBeenCalled();
   document.querySelector<HTMLButtonElement>(".connection button")!.click();
-  await vi.waitFor(() => expect(document.querySelector(".review-modes button")).not.toBeNull());
-  Array.from(document.querySelectorAll<HTMLButtonElement>(".review-modes button")).find(b=>b.textContent==="Current files")!.click();
+  await vi.waitFor(() => expect(document.querySelector(".stage-navigation button")).not.toBeNull());
+  Array.from(document.querySelectorAll<HTMLButtonElement>(".stage-navigation button")).find(b=>b.textContent==="Current files")!.click();
   await vi.waitFor(() => expect(document.querySelector(".scan-name")).not.toBeNull());
   expect(document.querySelector(".connection")).toBeNull();
 });
@@ -79,10 +79,10 @@ it("an obsolete lineage error cannot replace the newer selected file", async () 
         }),
   );
   await import("./main");
-  await vi.waitFor(() => expect(document.querySelector(".review-modes button")).not.toBeNull());
-  Array.from(document.querySelectorAll<HTMLButtonElement>(".review-modes button")).find(b=>b.textContent==="Current files")!.click();
+  await vi.waitFor(() => expect(document.querySelector(".stage-navigation button")).not.toBeNull());
+  Array.from(document.querySelectorAll<HTMLButtonElement>(".stage-navigation button")).find(b=>b.textContent==="Current files")!.click();
   await vi.waitFor(() => expect(document.querySelector(".scan-name")).not.toBeNull());
-  Array.from(document.querySelectorAll<HTMLButtonElement>(".review-modes button")).find(b=>b.textContent==="Current files")!.click();
+  Array.from(document.querySelectorAll<HTMLButtonElement>(".stage-navigation button")).find(b=>b.textContent==="Current files")!.click();
   document.querySelector<HTMLButtonElement>(".scan-name")!.click();
   document.querySelector<HTMLButtonElement>(".inspector-tabs button")!.click();
   await vi.waitFor(() =>

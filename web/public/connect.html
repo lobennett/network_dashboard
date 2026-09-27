@@ -153,12 +153,25 @@
         service, refreshes the study index, and starts a local connection. Leave the terminal running.</p>
       <h2>2. Open the dashboard</h2>
       <p>Go to <a href="/">the dashboard</a>, select <strong>Connect to local study</strong>,
-        and allow local-network access if Chrome asks. Choose a step in <strong>Stage history</strong> to inspect its inputs, outputs and exclusions. Choose <strong>Current files</strong> for the latest inventory.
+        and allow local-network access if Chrome asks. Choose a processing step to inspect its inputs, outputs and exclusions. Choose <strong>Current files</strong> for the latest inventory.
         Select a scan, then use <strong>Images &amp; reports</strong> to open an image or report.</p>
       <p>Files download from Oak when opened and remain cached for future visits.
         FreeSurfer review offers norm/ribbon overlays and individual white/pial surfaces
         when the reconstruction and its provenance are available. Fieldmaps and magnitude
         images appear alongside the session’s other scans.</p>
+      <details>
+        <summary>How the connection works</summary>
+        <p><code>uvx</code> downloads the dashboard wheel and runs its command in an isolated
+          Python environment. It can obtain Python 3.12 for you; it does not install the
+          package into your project's environment.</p>
+        <p>The command authenticates with Sherlock over SSH, copies the study index and
+          defacing records from Oak, then starts a read-only server at
+          <code>http://127.0.0.1:18782</code>. This address is accessible on your computer only.</p>
+        <p>The website reads that local index. Opening an image or report fetches the needed
+          file over SSH, verifies its recorded checksum, and caches it locally. This is an
+          on-demand cache, not a full dataset sync; nothing is written back to Oak.
+          Restarting the command refreshes the index. Vercel receives no study files.</p>
+      </details>
       <details>
         <summary>Next time, updates, and disk space</summary>
         <p>Run the same command next time. Restart it to refresh the index or renew SSH
