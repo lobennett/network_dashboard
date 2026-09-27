@@ -42,7 +42,7 @@ it("does not describe absent reviews as approved", () => {
 
 it("keeps processing steps visible when browsing current files",()=>{
  const controls=reviewControls('current',vi.fn());
- expect(controls.querySelectorAll('button')).toHaveLength(10);
+ expect(controls.querySelectorAll('button')).toHaveLength(11);
  expect(controls.querySelector('[aria-current="step"]')?.textContent).toBe('Current files');
  expect(controls.textContent).not.toContain('Stage history');
 });

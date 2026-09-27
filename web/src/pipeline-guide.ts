@@ -115,11 +115,11 @@ export const guideSteps: Step[] = [
   },
   {
     id: "validate",
-    title: "Complete & validate BIDS",
-    caption: "Events, participants and B0 links",
+    title: "B0 linkage & validation",
+    caption: "Fieldmaps → BOLD sidecars",
     x: 390,
     y: 420,
-    stage: "events",
+    stage: "b0",
     tool: "network_fmri · BIDS Validator",
     input: "Prepared images, events and participant metadata.",
     action:

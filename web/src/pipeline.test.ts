@@ -72,3 +72,8 @@ it("recognizes canonical surface review and fMRIPrep completion milestones", () 
     stageStatus("fmriprep", [{ stage: "fmriprep-complete", state: "success" }]),
   ).toBe("Complete");
 });
+it('shows B0 linkage separately from events, before image QC', () => {
+  expect(stageFor('b0-fieldmaps-linked')).toBe('b0');
+  expect(stageFor('bids-precuration-validated')).toBe('b0');
+  expect(stageStatus('b0',[{stage:'bids-precuration-validated',state:'success'}])).toBe('Complete');
+});

@@ -5,12 +5,13 @@ from typing import Literal
 
 from network_dashboard.records import dataset_roots, rows
 
-Stage = Literal['source', 'bids', 'trim', 'events', 'mriqc', 'review', 'surfaces', 'fmriprep', 'registration']
+Stage = Literal['source', 'bids', 'trim', 'events', 'b0', 'mriqc', 'review', 'surfaces', 'fmriprep', 'registration']
 PRODUCERS = {
     'source': {'flywheel-selection'},
     'bids': {'conversion', 'defacing', 'bids-assembled'},
     'trim': {'trim_dummy', 'gs-pretrim', 'dummy-volumes-trimmed', 'gs-posttrim'},
-    'events': {'events', 'bids-events-generated', 'behavioral-sourcedata-ingested', 'participants-ingested', 'b0-fieldmaps-linked', 'bids-precuration-validated'},
+    'events': {'events', 'bids-events-generated', 'behavioral-sourcedata-ingested', 'participants-ingested'},
+    'b0': {'b0-fieldmaps-linked', 'bids-precuration-validated'},
     'mriqc': {'mriqc', 'mriqc-complete'},
     'review': {'scan-decisions-generated', 'scan-decisions-approved', 'mriqc-curated', 'bids-curated-validated'},
     'surfaces': {'freesurfer', 'freesurfer-complete', 'surface-evidence-extraction', 'surface-review-approved'},
@@ -19,7 +20,7 @@ PRODUCERS = {
 }
 FINDINGS = {
     'source': {'flywheel-acquisition'}, 'bids': set(), 'trim': set(),
-    'events': {'behavior-truncation'}, 'mriqc': {'mriqc'},
+    'events': {'behavior-truncation'}, 'b0': set(), 'mriqc': {'mriqc'},
     'review': {'scan-review'}, 'surfaces': {'surface-review'},
     'fmriprep': {'fmriprep-output-check'},
     'registration': {'registration-output', 'final-output-review'},

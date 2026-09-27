@@ -66,3 +66,13 @@ def test_trim_summary_uses_verified_global_signal_tables_not_mriqc(study):
     result=client(study).get('/api/subjects/s03/trim').json()
     assert result['scans'][0]['before'] is None
     assert result['errors']
+
+
+def test_b0_linkage_has_its_own_stage_not_events(study):
+    with sqlite3.connect(study[1]) as db:
+        db.execute('INSERT INTO processing_attempts VALUES (?,?)', ('b0',json.dumps({'id':'b0','stage':'b0-fieldmaps-linked','scope':'dataset','status':'success'})))
+    c=client(study)
+    response=c.get('/api/subjects/s03/stages/b0')
+    assert response.status_code==200
+    assert response.json()['processing'][0]['stage']=='b0-fieldmaps-linked'
+    assert c.get('/api/subjects/s03/stages/events').json()['processing']==[]
