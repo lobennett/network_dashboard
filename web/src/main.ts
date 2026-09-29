@@ -72,7 +72,7 @@ function chooseStage(stage: Stage, preferred?:RecordRow) {
   rememberSelection();
   inspector.clear();
   const openStageFile=(file:StageFile,trace?:boolean)=>{
-    if(!trace&&/\.(pdf|tsv|json|html|txt|csv)$/i.test(file.path)){void openRecordedFile(file.id,file.path);return;}
+    if(!trace&&/\.(pdf|tsv|json|html|txt|csv|png|jpg)$/i.test(file.path)){void openRecordedFile(file.id,file.path);return;}
     document.querySelector<HTMLElement>(".review-workspace")!.hidden=false;
     void inspector.showArtifact(file,stage==="b0"&&!trace?"current":stage,trace);
     find("inspector").scrollIntoView({block:"start"});
@@ -223,6 +223,7 @@ async function start() {
     update();
     window.setInterval(update, 60_000);
     find("subjects").replaceChildren();
+    subjects.sort((a, b) => a.subject.localeCompare(b.subject, "en", { numeric: true }));
     for (const { subject } of subjects) {
       const button = element("button", `sub-${subject}`);
       button.dataset.subject = subject;

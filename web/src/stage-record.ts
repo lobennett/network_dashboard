@@ -1,3 +1,4 @@
+import {surfaceQCPanel} from './surface-qc';
 import { element, details, type RecordRow } from './review';
 import { stages, reviewMetrics, humanize, type Stage, type Subject } from './pipeline';
 import { acquisitionRecords } from './flywheel';
@@ -12,7 +13,7 @@ export const stageMethods: Record<Stage,{tools:string;inputs:string;outputs:stri
  b0:{tools:'network_fmri · BIDS Validator',inputs:'Session fieldmap/magnitude and BOLD sidecar JSONs.',outputs:'Linked sidecars and BIDS validation logs.',change:'Set matching B0FieldIdentifier on fieldmaps and B0FieldSource on BOLD within each session. Run after gs-posttrim and before MRIQC or FreeSurfer; this changes metadata, not image volumes.'},
  mriqc:{tools:'MRIQC 24.0.2 · network_fmri',inputs:'Prepared BIDS images.',outputs:'Image-quality metrics (IQMs), HTML reports and extraction receipts.',change:'Measure image quality. MRIQC does not exclude scans; its metrics inform the scan-review stage.'},
  review:{tools:'network_qa · network_fmri · manual review',inputs:'MRIQC metrics, echo completeness, scan lengths and behavioral findings.',outputs:'scan_decisions.tsv, approval records and curated BIDS.',change:'Record preprocessing retention separately from task-model exclusions. High motion is a review flag, not an automatic exclusion.'},
- surfaces:{tools:'FreeSurfer 8.2.0 · network_fmri · manual review',inputs:'Selected, defaced anatomical scans.',outputs:'Reconstruction, ribbon, white/pial surfaces and surface_review.tsv.',change:'Reconstruct surfaces in parallel with MRIQC. Inspect and approve the reconstruction before fMRIPrep.'},
+ surfaces:{tools:'FreeSurfer 8.2.0 · FSQC 2.1.4 · network_fmri · manual review',inputs:'Selected, defaced anatomical scans.',outputs:'Reconstruction, FSQC metrics and overlays, and surface_review.tsv.',change:'Reconstruct surfaces in parallel with MRIQC. Inspect and approve the reconstruction before fMRIPrep.'},
  fmriprep:{tools:'fMRIPrep 25.2.5 · BABS / MechaBABS · network_fmri',inputs:'Retained BIDS scans and the approved FreeSurfer 8.2 reconstruction.',outputs:'Preprocessed BOLD, surfaces, confounds, transforms and reports.',change:'Preprocess retained scans using approved surfaces. Do not trim canonical data again.'},
  registration:{tools:'fmriprepviz 0.1.0 · network_fmri · manual review',inputs:'T1w-space BOLD references and the approved FreeSurfer ribbon.',outputs:'Registration flipbook, input checksums and final approval.',change:'Overlay the ribbon on BOLD references to inspect alignment across runs. Final approval does not override analysis exclusions.'},
  current:{tools:'All recorded stages',inputs:'Current study inventory.',outputs:'Currently registered files, metrics and decisions.',change:'This view combines current results across stages. It is not a historical stage snapshot.'},
@@ -78,6 +79,7 @@ export function stageReport(data:Subject,stage:Stage,record:StageRecord|undefine
  else if(stage==='trim')changes.append(element('p','Volumes are removed, not whole scans. Actual removal counts require a recorded trimming receipt.'));
  else if(!record.outputs.length&&!(record.supporting_files??[]).length)changes.append(element('p','Historical files unrecorded. Use Current files for the latest inventory.','gap'));
  if(changes.children.length>1)panel.append(changes);
+ if(stage==='surfaces')panel.append(surfaceQCPanel(record,file=>open(file)));
  if(stage==='surfaces'||stage==='registration'){
   const approvals=element('section','','stage-approvals');approvals.append(element('h3',stage==='registration'?'Final output decisions':'Surface decisions'));
   if(!record.decisions.length)approvals.append(element('p','Approval unrecorded.','muted'));

@@ -123,3 +123,17 @@ def test_shared_validation_receipt_is_supporting_evidence_not_a_bold_output(stud
     assert value['outputs']==[]
     assert value['supporting_files'][0]['id']=='receipt'
     assert client(study).get('/api/subjects/s03/stages/bids').json()['supporting_files']==[]
+
+
+def test_surface_stage_includes_fsqc_and_only_current_campaign(study):
+    with sqlite3.connect(study[1]) as db:
+        db.execute('CREATE TABLE artifact_observations (artifact_id TEXT,commit_hash TEXT,availability TEXT)')
+        db.execute("INSERT INTO metadata VALUES ('active_projects',?)",(json.dumps({'freesurfer':{'path':'derivatives/FreeSurfer-8.2.0+current'}}),))
+        for suffix in ('current','old'):
+            db.execute('INSERT INTO artifacts VALUES (?,?,?,?,?)',(20 if suffix=='current' else 21,f'derivatives/fsqc-2.1.4+{suffix}','dataset:'+suffix,'dataset',None))
+            db.execute('INSERT INTO artifact_versions VALUES (?,?,?,?,?)',(suffix,suffix,'screenshots/sub-s03/sub-s03.png','sha256:'+suffix,'{}'))
+            db.execute('INSERT INTO artifact_observations VALUES (?,?,?)',(suffix,'commit','available'))
+            db.execute('INSERT INTO findings VALUES (?,?,?)',('scan','surface-qc',json.dumps({'metrics':{'holes_lh':3},'source_project':'derivatives/FreeSurfer-8.2.0+'+suffix})))
+    value=client(study).get('/api/subjects/s03/stages/surfaces').json()
+    assert {f['id'] for f in value['outputs']}=={'current'}
+    assert len(value['findings'])==1

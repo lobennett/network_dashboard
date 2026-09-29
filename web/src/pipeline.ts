@@ -60,7 +60,7 @@ export const stages = [
     title: "FreeSurfer 8.2.0",
     caption: "Reconstruct & review",
     description:
-      "FreeSurfer 8.2.0 can run alongside MRIQC on the selected anatomy. Inspect ribbon.mgz over norm.mgz in ITK-SNAP, then check white and pial meshes in Freeview. Corrections require reconstruction and repeat review; editing the ribbon alone does not update surfaces. Approve the final reconstruction before fMRIPrep.",
+      "FreeSurfer 8.2.0 can run alongside MRIQC on the selected anatomy. FSQC 2.1.4 generates metrics and boundary overlays for review. Inspect ribbon.mgz over norm.mgz in ITK-SNAP, then check white and pial meshes in Freeview. Corrections require reconstruction and repeat review; editing the ribbon alone does not update surfaces. Approve the final reconstruction before fMRIPrep.",
   },
   {
     id: "fmriprep",
@@ -98,6 +98,7 @@ const milestoneStages: Record<string, Stage | "legacy"> = {
   "scan-decisions-approved": "review",
   "mriqc-curated": "review",
   "bids-curated-validated": "review",
+  fsqc: "surfaces",
   freesurfer: "surfaces",
   "freesurfer-complete": "surfaces",
   "surface-review-generated": "surfaces",

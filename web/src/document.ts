@@ -28,6 +28,14 @@ export async function openRecordedFile(id: string, path: string) {
     );
     if (!response.ok)
       throw new Error((await response.json()).detail ?? "File unavailable");
+    if(/\.(png|jpg)$/i.test(path)){
+      const blob=await response.blob();
+      if(!dialog.isConnected)return;
+      blobUrl=URL.createObjectURL(new Blob([blob],{type:path.endsWith('.png')?'image/png':'image/jpeg'}));
+      const img=element('img');img.src=blobUrl;img.alt=path.split('/').pop()??'QC image';img.style.maxWidth='100%';
+      const link=element('a','Download image');link.href=blobUrl;link.download=path.split('/').pop()??'qc.png';
+      status.replaceWith(link,img);return;
+    }
     if(path.endsWith('.pdf')){
       const blob=await response.blob();
       if(!dialog.isConnected)return;

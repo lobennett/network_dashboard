@@ -6,7 +6,7 @@ holds the canonical data; the dashboard uses a disposable local cache.
 With uv, SSH, and a Sherlock account with russpold Oak access:
 
 ```bash
-uvx --python 3.12 --from https://network-dashboard-devloganbennetts-projects.vercel.app/downloads/network_dashboard-0.8.0-py3-none-any.whl network-dashboard connect --ssh YOUR_SUNET_ID@login.sherlock.stanford.edu
+uvx --python 3.12 --from https://network-dashboard-devloganbennetts-projects.vercel.app/downloads/network_dashboard-0.8.1-py3-none-any.whl network-dashboard connect --ssh YOUR_SUNET_ID@login.sherlock.stanford.edu --study /oak/stanford/groups/russpold/data/network_grant/network-study-v1 --index /oak/stanford/groups/russpold/data/network_grant/network-dashboard-v1/records.sqlite
 ```
 
 Complete authentication, leave the command running, and open the
@@ -42,3 +42,7 @@ uv run network-dashboard --study /path/to/study --index /path/to/records.sqlite 
 ```
 
 Keep study data, indexes, credentials, and licenses out of Git and deployments.
+
+FSQC metrics and anatomical/surface PNGs appear in the FreeSurfer stage after
+the pipeline publishes its `fsqc-2.1.4` derivative. These support manual review;
+metric outliers do not approve or exclude a subject.

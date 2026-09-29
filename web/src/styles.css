@@ -638,3 +638,5 @@ a {
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+.surface-qc-panel{border-top:1px solid var(--border,#ddd);padding-top:1rem;margin-top:1rem}.fsqc-images{display:flex;flex-wrap:wrap;gap:.5rem;align-items:center}.fsqc-images h4{flex-basis:100%;margin-bottom:.25rem}.document-preview>img{display:block;width:100%;height:auto;background:#111}

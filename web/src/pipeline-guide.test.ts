@@ -36,3 +36,10 @@ it("runs registration visualization after preprocessing and before final review"
   expect(page.querySelector('[data-from="registration"][data-to="outputs"]')).not.toBeNull();
   expect(page.textContent).toContain("fmriprepviz 0.1.0");
 });
+it('shows FSQC before the manual surface approval gate',()=>{
+ const page=pipelineGuide(vi.fn());
+ expect(page.textContent).toContain('FSQC 2.1.4');
+ const step=page.querySelector('[data-step="fs"]')!;
+ step.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true}));
+ expect(page.querySelector('.guide-detail')!.textContent).toContain('boundary overlays');
+});

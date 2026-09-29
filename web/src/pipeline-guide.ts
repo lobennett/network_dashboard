@@ -144,16 +144,16 @@ export const guideSteps: Step[] = [
   {
     id: "fs",
     title: "FreeSurfer 8.2.0",
-    caption: "Standalone surface reconstruction",
+    caption: "Reconstruction → FSQC 2.1.4",
     x: 680,
     y: 550,
     stage: "surfaces",
-    tool: "BABS / MechaBABS · FreeSurfer",
+    tool: "BABS / MechaBABS · FreeSurfer 8.2.0 · FSQC 2.1.4",
     input: "Selected, defaced anatomical images.",
     action:
-      "Reconstruct cortical surfaces separately from fMRIPrep. This can run alongside MRIQC and does not wait for functional motion decisions.",
+      "Reconstruct cortical surfaces alongside MRIQC, then run FSQC for quality metrics, anatomical boundary overlays and surface views. Manual approval is still required.",
     output:
-      "Subject anatomy, ribbon, white and pial surfaces, and reconstruction evidence.",
+      "Subject anatomy, ribbon, white/pial surfaces, FSQC metrics and review images.",
   },
   {
     id: "scan-gate",
