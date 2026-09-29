@@ -16,8 +16,8 @@ from .records import connect, dataset_roots
 from .checksums import matches, verifiable
 
 OAK = '/oak/stanford/groups/russpold/data/network_grant'
-DEFAULT_STUDY = OAK + '/network-study-pilot-s03'
-DEFAULT_INDEX = OAK + '/network-dashboard-cache/records.sqlite'
+DEFAULT_STUDY = OAK + '/bids'
+DEFAULT_INDEX = OAK + '/network-dashboard-v1/records.sqlite'
 ORIGIN = 'https://network-dashboard-devloganbennetts-projects.vercel.app'
 
 

@@ -6,7 +6,7 @@ holds the canonical data; the dashboard uses a disposable local cache.
 With uv, SSH, and a Sherlock account with russpold Oak access:
 
 ```bash
-uvx --python 3.12 --from https://network-dashboard-devloganbennetts-projects.vercel.app/downloads/network_dashboard-0.8.1-py3-none-any.whl network-dashboard connect --ssh YOUR_SUNET_ID@login.sherlock.stanford.edu --study /oak/stanford/groups/russpold/data/network_grant/network-study-v1 --index /oak/stanford/groups/russpold/data/network_grant/network-dashboard-v1/records.sqlite
+uvx --python 3.12 --from https://network-dashboard-devloganbennetts-projects.vercel.app/downloads/network_dashboard-0.8.2-py3-none-any.whl network-dashboard connect --ssh YOUR_SUNET_ID@login.sherlock.stanford.edu --study /oak/stanford/groups/russpold/data/network_grant/bids --index /oak/stanford/groups/russpold/data/network_grant/network-dashboard-v1/records.sqlite
 ```
 
 Complete authentication, leave the command running, and open the
@@ -29,6 +29,11 @@ stage order. Images download when opened; restart the connector to refresh recor
 For an existing local DataLad clone, use `network-dashboard --study PATH --index PATH`.
 See [sharing](docs/sharing.md) for deployment and [analysis handoff](docs/analysis-handoff.md)
 for timing, exclusions, downloadable manifests, and saved design previews.
+
+## Architecture and reuse
+
+See [architecture](docs/architecture.md) for the index schema, SSH connector, viewer,
+and the parts to adapt for another study such as the Digital Brain Project.
 
 ## Development
 

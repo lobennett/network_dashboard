@@ -6,8 +6,8 @@ with uv and SSH; no Git, git-annex, or DataLad installation is required locally.
 The service binds to localhost and permits only the configured HTTPS frontend.
 
 `network-dashboard connect --ssh USER@HOST` uses the pilot at
-`/oak/stanford/groups/russpold/data/network_grant/network-study-pilot-s03` and index at
-`/oak/stanford/groups/russpold/data/network_grant/network-dashboard-cache/records.sqlite`.
+`/oak/stanford/groups/russpold/data/network_grant/bids` and index at
+`/oak/stanford/groups/russpold/data/network_grant/network-dashboard-v1/records.sqlite`.
 Override these with `--study` and `--index`. Each SSH/study/index combination gets its own cache; matching legacy caches are reused.
 `--cache` selects an explicit directory, which must match that connection.
 Restart to refresh the snapshot. Missing files are fetched on click and checked
@@ -33,7 +33,7 @@ read access to the authorized Oak group; copying that file can preserve its
 private permissions. For this study, collaborators belong to `oak_russpold`:
 
 ```bash
-SHARED_INDEX=/oak/stanford/groups/russpold/data/network_grant/network-dashboard-cache/records.sqlite
+SHARED_INDEX=/oak/stanford/groups/russpold/data/network_grant/network-dashboard-v1/records.sqlite
 install -m 0640 -g oak_russpold /path/to/records.sqlite "$SHARED_INDEX.pending"
 mv "$SHARED_INDEX.pending" "$SHARED_INDEX"
 ```
@@ -46,7 +46,7 @@ git-annex content for group read access too. Do not make the data world-readable
 ```bash
 uv build --wheel
 mkdir -p web/public/downloads
-cp dist/network_dashboard-0.6.3-py3-none-any.whl web/public/downloads/
+cp dist/network_dashboard-0.8.2-py3-none-any.whl web/public/downloads/
 vercel --prod
 ```
 

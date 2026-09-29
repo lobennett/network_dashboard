@@ -3,7 +3,7 @@
 The current Oak dataset is a **sub-s03 pilot**, not the final 46-subject release:
 
 ```text
-/oak/stanford/groups/russpold/data/network_grant/network-study-pilot-s03
+/oak/stanford/groups/russpold/data/network_grant/bids
 ```
 
 Use the dashboard's **Scan manifest (TSV)** for run-level decisions and **Provenance bundle (JSON)** for dataset commits, file checksums, availability, and recorded processing software. These are snapshots; pin the study and subdataset commits when starting an analysis. An indexed file may be historical or unavailable. Absence of an exclusion is not analysis approval.
