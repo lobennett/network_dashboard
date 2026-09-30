@@ -5,6 +5,7 @@ export type Subject = {
   attempts: RecordRow[];
   findings: RecordRow[];
   decisions: RecordRow[];
+  reference_stages?: Record<string, {label:string}>;
 };
 export const stages = [
   {

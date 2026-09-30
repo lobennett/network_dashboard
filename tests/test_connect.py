@@ -41,6 +41,35 @@ def test_uv_connect_fetches_only_opened_files_and_caches_verified_bytes(study, t
     assert api.get('/api/artifacts/report/content').status_code == 200
 
 
+def test_completed_pilot_report_fetches_from_its_original_oak_location(study, tmp_path):
+    from network_dashboard.remote import RemoteStudy
+    root,index = study
+    pilot = root.parent / 'network-study-pilot-s03'
+    pilot.mkdir()
+    report = pilot/'report.html'
+    report.write_text('<h1>Completed pilot</h1>')
+    with sqlite3.connect(index) as db:
+        db.execute('INSERT INTO artifacts VALUES (1,?,?,?,NULL)',('references/pilot-s03','dataset:pilot','dataset'))
+        db.execute('INSERT INTO artifact_versions VALUES (?,?,?,?,?)',('pilot-report','pilot','report.html','sha256:'+hashlib.sha256(report.read_bytes()).hexdigest(),'{}'))
+        context={'mount':'references/pilot-s03','source_study':str(pilot)}
+        db.execute('INSERT INTO metadata VALUES (?,?)',('reference_stages',json.dumps({'s03':{'fmriprep':context}})))
+    remote = RemoteStudy('user@host',root,index,tmp_path/'cache',runner=transport(tmp_path))
+    remote.prepare()
+    assert remote.fetch('pilot-report').read_text()=='<h1>Completed pilot</h1>'
+    with sqlite3.connect(remote.index) as db:
+        context['source_study']='/etc'
+        db.execute("UPDATE metadata SET value=? WHERE key='reference_stages'",(json.dumps({'s03':{'fmriprep':context}}),))
+        with pytest.raises(HTTPException,match='Unsafe reference'):
+            remote.source_path(db,Path('references/pilot-s03/report.html'))
+
+
+def test_reference_connection_requires_all_three_arguments(capsys):
+    from network_dashboard.cli import connect_main
+    with pytest.raises(SystemExit):
+        connect_main(['--ssh','sherlock','--reference-subject','s03'])
+    assert 'provide --reference-study, --reference-index and --reference-subject together' in capsys.readouterr().err
+
+
 def test_failed_checksum_leaves_no_cached_file(study, tmp_path):
     from network_dashboard.remote import RemoteStudy
     remote = RemoteStudy('user@host', study[0], study[1], tmp_path / 'cache', runner=transport(tmp_path))

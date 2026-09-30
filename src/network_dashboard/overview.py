@@ -78,6 +78,7 @@ def study_overview(db):
                 elif completion['status']=='awaiting-review':status='Awaiting review'
         current='registration' if status=='Complete' else next((s for s,v in states.items() if v==status),None)
         subjects.append({'subject':subject,'indexed':bool(own),'status':status,'focus_stage':current,
+                         'reference_stages':json.loads(metadata.get('reference_stages','{}')).get(subject,{}),
                          'stages':states,'jobs':[a for a in jobs if a.get('job_id')],
                          'flagged':sum(bool(r.get('flags')) for r in reviews),'review_required':required,
                          'preprocessing_excluded':sum(d['scope']=='preprocessing' and d['decision'] in {'drop','exclude'} for d in ds),

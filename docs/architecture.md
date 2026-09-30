@@ -50,5 +50,20 @@ It uses the MechaBABS study layout: raw BIDS is `sourcedata/raw`, with versioned
 processing outputs under `derivatives`. Pass the raw subdataset to BIDS tools.
 The historical `network-study-v1` path is retained as a compatibility link.
 
+Completed pilot results can be linked into the full-sample view without copying
+images or changing campaign decisions. The connector preserves dataset IDs,
+checksums and ancestry, labels pilot outputs, and prefers current campaign outputs
+when available. Pilot approvals apply only to the pilot. For a local demo:
+
+```bash
+uv run network-dashboard connect --ssh sherlock --web web/dist \
+  --reference-study /oak/stanford/groups/russpold/data/network_grant/network-study-pilot-s03 \
+  --reference-index /oak/stanford/groups/russpold/data/network_grant/network-dashboard-cache/records.sqlite \
+  --reference-subject s03
+```
+
+Open `http://127.0.0.1:18782`. Restarting this command refreshes both indexes and
+rebuilds the combined cache; neither source study is modified.
+
 CI runs Python tests, frontend tests, builds and a whitespace check. Do not commit
 study indexes, image data, credentials, FreeSurfer licenses, or local caches.

@@ -44,14 +44,27 @@ def connect_main(argv):
     parser.add_argument('--cache', type=Path, help='cache directory (default: separate cache per connection under ~/.cache/network-dashboard)')
     parser.add_argument('--origin', default=ORIGIN)
     parser.add_argument('--port', type=int, default=18782)
+    parser.add_argument('--web', type=Path, help='serve a locally built frontend (development/demo)')
+    parser.add_argument('--reference-study', type=Path, help='completed pilot study in the same Oak parent')
+    parser.add_argument('--reference-index', type=Path, help='index for that pilot')
+    parser.add_argument('--reference-subject', help='subject whose completed pilot outputs should be linked')
     args = parser.parse_args(argv)
+    reference_args = (args.reference_study, args.reference_index, args.reference_subject)
+    if any(reference_args) and not all(reference_args):
+        parser.error('provide --reference-study, --reference-index and --reference-subject together')
     try:
         remote = RemoteStudy(args.ssh, args.study, args.index, args.cache)
-        app = create_app(remote.index, remote.study, allowed_origins=[args.origin], fetcher=remote.fetch,
+        app = create_app(remote.index, remote.study, args.web, allowed_origins=[args.origin], fetcher=remote.fetch,
                          archive_fetcher=remote.fetch_archive)
         remote.authenticate()
         remote.prepare()
+        if all(reference_args):
+            pilot = RemoteStudy(args.ssh, args.reference_study, args.reference_index)
+            pilot.ssh_options = remote.ssh_options
+            pilot.prepare()
+            remote.add_reference(pilot, args.reference_subject)
     except (HTTPException, ValueError, OSError, subprocess.SubprocessError) as error:
         parser.error(str(getattr(error, 'detail', error)))
-    print(f'Open {args.origin} and connect to the local study. Leave this terminal running.\nCache: {remote.cache}', flush=True)
+    destination = f'http://127.0.0.1:{args.port}' if args.web else args.origin
+    print(f'Open {destination}. Leave this terminal running.\nCache: {remote.cache}', flush=True)
     uvicorn.run(app, host='127.0.0.1', port=args.port)

@@ -2,7 +2,7 @@ import {element} from './review';
 import {apiUrl} from './api';
 import {stages,type Stage} from './pipeline';
 type Snapshot=Record<string,string>;
-type Progress={subject:string;indexed:boolean;status:string;focus_stage?:string|null;stages:Record<string,string>;flagged:number;review_required:number;preprocessing_excluded:number;task_excluded:number;source_skipped:number;jobs:Record<string,unknown>[]};
+type Progress={subject:string;indexed:boolean;status:string;focus_stage?:string|null;stages:Record<string,string>;reference_stages?:Record<string,{label:string}>;flagged:number;review_required:number;preprocessing_excluded:number;task_excluded:number;source_skipped:number;jobs:Record<string,unknown>[]};
 export type Overview={snapshot:Snapshot;expected_subjects:number;indexed_subjects:number;note:string;subjects:Progress[];datasets:{path:string;commit_hash:string|null;kind:string}[]};
 export type Exclusion={subject?:string;session?:string;task?:string;run?:string;stage:string;scope:string;decision:string;reason?:string;reviewer?:string;reviewed_at?:string;preprocessing?:string;source_id?:string;label?:string};
 export type Exclusions={snapshot:Snapshot;note:string;rows:Exclusion[]};
@@ -21,6 +21,7 @@ export function overviewPage(value:Overview,select:(subject:string,stage:Stage)=
   const focus=row.focus_stage as Stage|null|undefined;
   if(row.indexed){const button=element('button',`sub-${row.subject}`,'text-button');button.onclick=()=>select(row.subject,focus??'source');subject.append(button);}else subject.textContent=`sub-${row.subject}`;
   status.append(element('strong',row.status));if(focus)status.append(element('div',title(focus),'muted'));
+  if(row.reference_stages?.fmriprep){const pilot=element('button',row.reference_stages.fmriprep.label,'text-button');pilot.onclick=()=>select(row.subject,'fmriprep');status.append(pilot);}
   if(row.indexed)excluded.append(element('div',`${row.preprocessing_excluded} preprocessing`),element('div',`${row.task_excluded} task models`),element('small',`${row.source_skipped} source acquisitions skipped`));
   else excluded.textContent='Unknown';
   const details=element('details');details.append(element('summary','Stage status'));

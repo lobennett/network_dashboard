@@ -33,6 +33,9 @@ def stage_record(db, study, subject, stage):
     for row in rows(db, 'SELECT evidence_json FROM processing_attempts'):
         value = json.loads(row['evidence_json'])
         scope = value.get('scope', '')
+        reference_subject = value.get('reference_subject')
+        if reference_subject and (reference_subject != subject or stage not in ('fmriprep', 'registration')):
+            continue
         if value.get('stage') in PRODUCERS[stage] and (scope in ('dataset', f'sub-{subject}') or scope.startswith(f'sub-{subject}/')):
             processing.append(value)
     ids = {p['id'] for p in processing}
@@ -50,6 +53,19 @@ def stage_record(db, study, subject, stage):
     active = json.loads(metadata.get('active_projects', '{}'))
     active_key = {'surfaces': 'freesurfer', 'registration': 'fmriprepviz'}.get(stage, stage)
     active_path = active.get(active_key, {}).get('path')
+    reference = json.loads(metadata.get('reference_stages', '{}')).get(subject, {}).get(stage)
+    # Prefer actual current-campaign outputs whenever they exist for this subject.
+    current_present = any(pattern.search(f['path']) and roots.get(f['dataset_id']) and
+                          (str(roots[f['dataset_id']].relative_to(study)) in {active_path, str(active_path) + '+review'}
+                           if active_path else stage == 'registration' and roots[f['dataset_id']].name.startswith('fmriprepviz-')
+                           and not roots[f['dataset_id']].is_relative_to(study / 'references'))
+                          for f in files)
+    if current_present:
+        reference = None
+        processing = [p for p in processing if not p.get('reference_subject')]
+        output_files = [f for f in output_files if not str(roots.get(f['dataset_id'], '')).startswith(str(study / 'references'))]
+    elif reference:
+        active_path = reference['projects'].get(active_key)
 
     def owned(root):
         name = root.name.lower()
@@ -66,6 +82,8 @@ def stage_record(db, study, subject, stage):
     seen = {f['id'] for f in output_files}
     for file in files:
         root = roots.get(file['dataset_id'])
+        if root and root.is_relative_to(study / 'references') and stage not in ('fmriprep', 'registration'):
+            continue
         if stage == 'trim' and root and file['id'] in current_ids and global_signal_label(root, file['path']):
             if file['id'] not in seen:
                 output_files.append({**file, 'stage_basis': 'current_stage_dataset'})
@@ -82,19 +100,23 @@ def stage_record(db, study, subject, stage):
             output_files.append({**file, 'stage_basis': 'current_stage_dataset'})
             seen.add(file['id'])
     findings = [f for f in rows(db, 'SELECT f.* FROM findings f JOIN entities e USING(entity_key) WHERE e.subject=?', (subject,)) if f['finding_type'] in FINDINGS[stage]]
+    if not reference:
+        findings = [f for f in findings if not json.loads(f['evidence_json']).get('reference_study_commit')]
     if stage == 'surfaces' and active_path:
         findings = [f for f in findings if f['finding_type'] != 'surface-qc' or json.loads(f['evidence_json']).get('source_project') == active_path]
         output_files = [f for f in output_files if not (roots.get(f['dataset_id']) and roots[f['dataset_id']].name.startswith('fsqc-')) or str(roots[f['dataset_id']].relative_to(study)) == re.sub(r'FreeSurfer-8\.[^+]+', 'fsqc-2.1.4', active_path)]
     decisions = rows(db, 'SELECT d.* FROM decisions d JOIN entities e USING(entity_key) WHERE e.subject=?', (subject,))
     scopes = {'review': {'preprocessing', 'task_first_level', 'timeseries'}, 'surfaces': {'surface'}, 'registration': {'output'}}.get(stage, set())
     decisions = [d for d in decisions if d['scope'] in scopes]
+    if reference:
+        decisions = reference.get('decisions', [])
     milestones = [a for a in rows(db, "SELECT * FROM stage_attempts WHERE scope IN (?, 'dataset') OR scope LIKE ?", (f'sub-{subject}', f'sub-{subject}/%')) if a['stage'] in PRODUCERS[stage]]
-    supporting_files = stage_supporting_files(files, current_ids, roots, study, subject, stage)
+    supporting_files = stage_supporting_files([f for f in files if not (roots.get(f['dataset_id']) and roots[f['dataset_id']].is_relative_to(study / 'references'))], current_ids, roots, study, subject, stage)
     return {'stage': stage, 'subject': subject, 'processing': processing,
             'supporting_files': supporting_files,
             'inputs': input_files, 'outputs': output_files, 'findings': findings,
             'decisions': decisions, 'milestones': milestones,
-            'snapshot_kind': 'recorded_stage_evidence',
+            'snapshot_kind': 'recorded_stage_evidence', 'reference': reference,
             'note': 'Recorded transformations identify exact file versions. Current derivative files are labeled separately. A complete historical checkout is not implied; absent records remain unknown.'}
 
 

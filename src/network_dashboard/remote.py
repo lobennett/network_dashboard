@@ -112,6 +112,24 @@ class RemoteStudy:
         for row in receipts:
             self.fetch(row['id'])
 
+    def add_reference(self, pilot: 'RemoteStudy', subject: str):
+        """Link completed pilot evidence in this cache; leave both studies unchanged."""
+        from .references import import_reference
+        if pilot.host != self.host or pilot.source.parent != self.source.parent:
+            raise ValueError('Pilot must use the same SSH host and Oak study parent')
+        incoming = self.cache / 'reference.pending'
+        try:
+            import_reference(self.index, pilot.index, incoming, subject=subject,
+                             mount=f'references/pilot-{subject}', label=f'Completed {subject} pilot',
+                             source_study=str(pilot.source))
+            os.replace(incoming, self.index)
+        finally:
+            incoming.unlink(missing_ok=True)
+        with connect(self.index) as db:
+            receipts = [r[0] for r in db.execute("SELECT id FROM artifact_versions WHERE path LIKE 'code/network_fw2bids/defacing/%.json'")]
+        for identity in receipts:
+            self.fetch(identity)
+
     def fetch(self, identity: str) -> Path:
         with self.lock, connect(self.index) as db:
             row = db.execute('SELECT * FROM artifact_versions WHERE id=?', (identity,)).fetchone()
@@ -131,8 +149,25 @@ class RemoteStudy:
                 raise HTTPException(403, 'Cache path leaves the study')
             if not verifiable(artifact['content_id']):
                 raise HTTPException(409, 'Artifact has no verifiable content checksum')
-            self._download(self.source / relative, target, artifact['content_id'])
+            self._download(self.source_path(db, relative), target, artifact['content_id'])
             return content_path(db, self.study, artifact)
+
+    def source_path(self, db, relative: Path) -> Path:
+        """Resolve an explicitly linked pilot within the same Oak study parent."""
+        row = db.execute("SELECT value FROM metadata WHERE key='reference_stages'").fetchone()
+        for stages in json.loads(row[0] if row else '{}').values():
+            for context in stages.values():
+                mount = Path(context['mount'])
+                if not relative.is_relative_to(mount):
+                    continue
+                source = Path(context.get('source_study', ''))
+                if (not source.is_absolute() or source.parent != self.source.parent
+                        or not re.fullmatch(r'network-study-pilot-[A-Za-z0-9_-]+', source.name)
+                        or mount.is_absolute() or '..' in mount.parts
+                        or len(mount.parts) != 2 or mount.parts[0] != 'references'):
+                    raise HTTPException(403, 'Unsafe reference study source')
+                return source / relative.relative_to(mount)
+        return self.source / relative
 
     def fetch_archive(self, identity: str) -> Path:
         """Internal MRIQC report fallback; archives are never served by the API."""
@@ -152,7 +187,7 @@ class RemoteStudy:
                 with target.open('rb') as stream:
                     if 'sha256:' + hashlib.file_digest(stream, 'sha256').hexdigest() == row['content_id']:
                         return target
-            self._download(self.source / target.relative_to(self.study), target, row['content_id'])
+            self._download(self.source_path(db, target.relative_to(self.study)), target, row['content_id'])
             return target
 
 

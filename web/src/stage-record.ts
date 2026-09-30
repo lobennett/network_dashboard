@@ -4,7 +4,7 @@ import { stages, reviewMetrics, humanize, type Stage, type Subject } from './pip
 import { acquisitionRecords } from './flywheel';
 import { scanPrefix } from './scans';
 export type StageFile = {id:string;path:string;dataset_id:string;content_id:string;stage_basis?:string};
-export type StageRecord = {stage:string;subject:string;processing:RecordRow[];inputs:StageFile[];outputs:StageFile[];findings:RecordRow[];decisions:RecordRow[];milestones:RecordRow[];snapshot_kind:string;note:string;supporting_files?:(StageFile & {purpose:string})[]};
+export type StageRecord = {stage:string;subject:string;processing:RecordRow[];inputs:StageFile[];outputs:StageFile[];findings:RecordRow[];decisions:RecordRow[];milestones:RecordRow[];snapshot_kind:string;note:string;reference?:{label:string;study_commit:string;source_study?:string};supporting_files?:(StageFile & {purpose:string})[]};
 export const stageMethods: Record<Stage,{tools:string;inputs:string;outputs:string;change:string}> = {
  source:{tools:'network_fw2bids · Flywheel API',inputs:'Flywheel acquisitions: DICOM archives and GE P-files.',outputs:'Selection records with acquisition IDs and reasons.',change:'Select supported acquisitions; skip qa-reject scans and unsupported acquisition types before download.'},
  bids:{tools:'network_fw2bids · dcm2niix · CNI spiral-recon · PyDeface',inputs:'Selected DICOMs; existing CNI fieldmap/magnitude reconstructions.',outputs:'BIDS NIfTI/JSON files and conversion/defacing receipts.',change:'Convert DICOMs, import CNI fieldmap/magnitude pairs, and deface anatomy before storage.'},
@@ -58,6 +58,9 @@ export function stageReport(data:Subject,stage:Stage,record:StageRecord|undefine
  if(record){const download=element('button','Download stage record (JSON)','text-button');download.onclick=()=>{const url=URL.createObjectURL(new Blob([JSON.stringify(record,null,2)],{type:'application/json'}));const link=element('a');link.href=url;link.download=`sub-${record.subject}_${stage}_record.json`;link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};supporting.append(download);}
  if(stage==='current'){panel.append(supporting);return panel;}
  if(!record){panel.append(element('p','Loading recorded stage evidence…','muted'));return panel;}
+ if(record.reference){const reference=element('aside','','stage-reference');reference.append(element('strong',record.reference.label),element('p','These completed outputs come from the pilot study. The full-sample campaign status and review decisions remain separate.'),element('small',`Source study commit: ${record.reference.study_commit}`));panel.append(reference);}
+ const notStarted=!record.reference&&!record.outputs.length&&['fmriprep','registration'].includes(stage)&&!data.attempts.some(a=>a.stage==='fmriprep'&&['complete','success'].includes(String(a.state)));
+ if(notStarted)panel.append(element('p',stage==='registration'?'Waiting for fMRIPrep — registration reports will appear after preprocessing completes.':'Not started — this campaign has no fMRIPrep results yet.','stage-state'));
  const pending=record.findings.filter(f=>{try{const r=JSON.parse(String(f.evidence_json));return r.approval_required==='yes'&&r.approved!=='yes';}catch{return false;}}).length;
  const quick=element('div','','stage-check-summary');quick.append(element('span',`${record.inputs.length} linked input versions`),element('span',`${record.outputs.length} output versions`),element('span',['review','surfaces','registration'].includes(stage)?pending?`${pending} needs approval`:record.findings.length||record.decisions.length?'See recorded review decisions':'Approval unrecorded':`${record.findings.length} findings`));panel.append(quick);
  const receipts=element('div','','stage-receipts');for(const file of record.supporting_files??[]){const button=element('button',file.purpose,'text-button');button.title=`${file.path} · Current supporting record`;button.onclick=()=>open(file);receipts.append(button);}if(receipts.children.length){receipts.prepend(element('span','Receipts & reports: ','muted'));panel.append(receipts);}
@@ -77,10 +80,10 @@ export function stageReport(data:Subject,stage:Stage,record:StageRecord|undefine
  }else if(stage==='mriqc')changes.append(element('p','MRIQC produces metrics and reports. Scan exclusions belong to Scan review.'));
  else if(stage==='events')changes.append(element('p',`${record.findings.length} behavioral timing findings recorded. Task-model decisions belong to Scan review.`));
  else if(stage==='trim')changes.append(element('p','Volumes are removed, not whole scans. Actual removal counts require a recorded trimming receipt.'));
- else if(!record.outputs.length&&!(record.supporting_files??[]).length)changes.append(element('p','Historical files unrecorded. Use Current files for the latest inventory.','gap'));
+ else if(!notStarted&&!record.outputs.length&&!(record.supporting_files??[]).length)changes.append(element('p','Historical files unrecorded. Use Current files for the latest inventory.','gap'));
  if(changes.children.length>1)panel.append(changes);
  if(stage==='surfaces')panel.append(surfaceQCPanel(record,file=>open(file)));
- if(stage==='surfaces'||stage==='registration'){
+ if(stage==='surfaces'||stage==='registration'&&!notStarted){
   const approvals=element('section','','stage-approvals');approvals.append(element('h3',stage==='registration'?'Final output decisions':'Surface decisions'));
   if(!record.decisions.length)approvals.append(element('p','Approval unrecorded.','muted'));
   for(const d of record.decisions)approvals.append(element('p',`${humanize(d.decision)}${d.reviewer?` · ${d.reviewer}`:''}${d.reviewed_at?` · ${d.reviewed_at}`:''} — ${d.reason??'Reason unrecorded'}`));
@@ -88,7 +91,7 @@ export function stageReport(data:Subject,stage:Stage,record:StageRecord|undefine
  }
  if(stage!=='source'){
   const files=element('details','','stage-output-files');files.append(element('summary',`Stage outputs (${record.outputs.length} recorded file versions)`));
-  if(!record.outputs.length)files.append(element('p','Historical file inventory unrecorded. Current BIDS files are available under Current files; they are not substituted here.','gap'));
+  if(!record.outputs.length)files.append(element('p',notStarted?'No outputs yet.':'Historical file inventory unrecorded. Current BIDS files are available under Current files; they are not substituted here.','gap'));
   else {files.append(element('p','Exact transformation outputs and current stage derivatives are labeled separately. Older versions may be unavailable.','muted'));
    for(const file of record.outputs.slice(0,100)){const row=element('div','','stage-file-row'),button=element('button',file.path,'text-button');button.onclick=()=>open(file);row.append(button,element('small',file.stage_basis==='recorded_transformation'?'Exact transformation output':'Current stage derivative'));files.append(row);}
    if(record.outputs.length>100)files.append(element('p',`Showing the first 100 of ${record.outputs.length} files. Select a scan below to narrow the list.`,'muted'));

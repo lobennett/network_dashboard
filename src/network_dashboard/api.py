@@ -109,6 +109,7 @@ def create_app(index: Path, study: Path, web: Path | None = None, *, allowed_ori
             if not entities:
                 raise HTTPException(404, "Unknown subject")
             return {"entities": entities,
+                    "reference_stages": json.loads(dict(db.execute('SELECT key,value FROM metadata')).get('reference_stages', '{}')).get(subject, {}),
                     "attempts": rows(db, "SELECT * FROM stage_attempts WHERE scope IN (?, 'dataset') OR scope LIKE ?",
                                      ("sub-" + subject, "sub-" + subject + "/%")),
                     "decisions": rows(db, "SELECT d.* FROM decisions d JOIN entities e ON e.entity_key=d.entity_key WHERE e.subject=?", (subject,)),

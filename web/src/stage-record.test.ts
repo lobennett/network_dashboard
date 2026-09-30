@@ -4,6 +4,26 @@ import { stageMetrics, evidenceExplanation, stageReport } from './stage-record';
 import type { Subject } from './pipeline';
 const scan={entity_key:'scan',subject:'s03',suffix:'bold'};
 const data:Subject={entities:[scan],attempts:[],decisions:[],findings:[{entity_key:'scan',finding_type:'scan-review',evidence_json:'{"fd_mean":0.3,"tr_count":100,"flags":"high_motion"}'}]};
+const emptyStageRecord={subject:'s03',processing:[],inputs:[],outputs:[],findings:[],decisions:[],milestones:[],snapshot_kind:'recorded_stage_evidence',note:''};
+it('identifies an unstarted fMRIPrep campaign instead of implying lost historical files',()=>{
+ const subject={...data,attempts:[{stage:'fmriprep',scope:'dataset',attempt:1,state:'ready'}]};
+ const panel=stageReport(subject,'fmriprep',{...emptyStageRecord,stage:'fmriprep'},vi.fn());
+ expect(panel.querySelector('.stage-state')?.textContent).toContain('Not started');
+ expect(panel.textContent).not.toContain('Historical file');
+});
+it('explains registration waiting on fMRIPrep without requesting premature final approval',()=>{
+ const subject={...data,attempts:[{stage:'fmriprep',scope:'dataset',attempt:1,state:'ready'}]};
+ const panel=stageReport(subject,'registration',{...emptyStageRecord,stage:'registration'},vi.fn());
+ expect(panel.querySelector('.stage-state')?.textContent).toContain('Waiting for fMRIPrep');
+ expect(panel.textContent).not.toContain('Historical file');
+ expect(panel.querySelector('.stage-approvals')).toBeNull();
+});
+it('retains the provenance gap when processing completed but its files are unrecorded',()=>{
+ const subject={...data,attempts:[{stage:'fmriprep',scope:'dataset',attempt:1,state:'complete'}]};
+ const panel=stageReport(subject,'fmriprep',{...emptyStageRecord,stage:'fmriprep'},vi.fn());
+ expect(panel.querySelector('.stage-state')).toBeNull();
+ expect(panel.textContent).toContain('Historical file inventory unrecorded');
+});
 it('keeps later MRIQC and approval metrics out of conversion and trimming',()=>{
  expect(stageMetrics(data,scan,'bids')).toEqual({});
  expect(stageMetrics(data,scan,'trim')).toEqual({});
