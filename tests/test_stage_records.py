@@ -3,6 +3,20 @@ import sqlite3
 from test_api import study, client
 
 
+def test_fmriprep_build_records_are_shared_evidence_not_scan_outputs(study):
+    with sqlite3.connect(study[1]) as db:
+        db.execute('CREATE TABLE artifact_observations (artifact_id TEXT,commit_hash TEXT,availability TEXT)')
+        for identity, name in [('correction', 'fmriprep-correction.json'), ('build', 'fmriprep-build.json')]:
+            db.execute('INSERT INTO artifact_versions VALUES (?,?,?,?,?)',
+                       (identity, 'study', 'code/network_fmri/' + name, 'sha256:' + identity, '{}'))
+            db.execute('INSERT INTO artifact_observations VALUES (?,?,?)', (identity, 'commit', 'available'))
+    c = client(study)
+    value = c.get('/api/subjects/s03/stages/fmriprep').json()
+    assert {f['id'] for f in value['supporting_files']} == {'correction', 'build'}
+    assert value['outputs'] == []
+    assert c.get('/api/subjects/s03/stages/source').json()['supporting_files'] == []
+
+
 def test_conversion_files_do_not_include_trimmed_versions_or_later_metrics(study):
     with sqlite3.connect(study[1]) as db:
         db.execute('CREATE TABLE artifact_observations (artifact_id TEXT,commit_hash TEXT,availability TEXT)')

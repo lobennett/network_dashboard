@@ -155,6 +155,8 @@ def stage_supporting_files(files, current_ids, roots, study, subject, stage):
             belongs=True;purpose='BIDS validator report'
         if stage=='review' and name in {'scan_decisions.tsv','analysis_exclusions.tsv'}:
             belongs=True;purpose='Scan decisions' if name=='scan_decisions.tsv' else 'Analysis exclusions'
+        if stage=='fmriprep' and file['path'] in {'code/network_fmri/fmriprep-build.json','code/network_fmri/fmriprep-correction.json'}:
+            belongs=True;purpose='fMRIPrep build provenance' if name=='fmriprep-build.json' else 'fMRIPrep correction status'
         if stage=='surfaces' and root.name.startswith('fsqc-') and name in {'fsqc-results.csv','surface-qc.json'}:
             belongs=True;purpose='FSQC metrics' if name.endswith('.csv') else 'FSQC provenance'
         if stage=='surfaces' and name=='surface_review.tsv':

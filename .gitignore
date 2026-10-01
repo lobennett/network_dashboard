@@ -13,3 +13,5 @@ web/test-results/
 
 .vercel/
 web/public/downloads/*.whl
+
+.worktrees/
