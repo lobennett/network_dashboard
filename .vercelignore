@@ -10,10 +10,6 @@
 web/src/*.test.ts
 !web/public/
 !web/public/connect.html
+!web/public/recovery.js
 !web/public/downloads/
-!web/public/downloads/network_dashboard-0.4.1-py3-none-any.whl
-!web/public/downloads/network_dashboard-0.4.2-py3-none-any.whl
-!web/public/downloads/network_dashboard-0.4.3-py3-none-any.whl
-!web/public/downloads/network_dashboard-0.5.0-py3-none-any.whl
-!web/public/downloads/network_dashboard-0.6.0-py3-none-any.whl
-!web/public/downloads/network_dashboard-0.6.1-py3-none-any.whl
+!web/public/downloads/*.whl
