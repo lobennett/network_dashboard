@@ -187,7 +187,7 @@ export const guideSteps: Step[] = [
   },
   {
     id: "fmriprep",
-    title: "fMRIPrep 25.2.5",
+    title: "fMRIPrep",
     caption: "Reuse the approved FS8 surfaces",
     x: 390,
     y: 810,
@@ -196,7 +196,7 @@ export const guideSteps: Step[] = [
     input:
       "Retained BIDS scans, linked fieldmaps and approved FreeSurfer subjects directory.",
     action:
-      "Preprocess the retained scans using the existing surfaces, with --fs-no-resume and --dummy-scans 0. The campaign monitors jobs and merges completed results.",
+      "Preprocess the retained scans using rigid atlas initialization and the approved surfaces, with --project-goodvoxels, --fs-no-resume and --dummy-scans 0. The campaign monitors jobs and merges completed results.",
     output:
       "Preprocessed BOLD, surface/CIFTI time series, confounds and reports.",
   },
