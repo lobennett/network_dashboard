@@ -46,7 +46,7 @@ git-annex content for group read access too. Do not make the data world-readable
 ```bash
 uv build --wheel
 mkdir -p web/public/downloads
-cp dist/network_dashboard-0.8.3-py3-none-any.whl web/public/downloads/
+cp dist/network_dashboard-0.8.4-py3-none-any.whl web/public/downloads/
 vercel --prod
 ```
 

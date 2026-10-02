@@ -11,7 +11,7 @@ FINISH = {'source':'conversion','bids':'bids-assembled','trim':'gs-posttrim',
           'surfaces':'surface-review-approved','fmriprep':'fmriprep-complete','registration':'fmriprepviz'}
 FAILED={'failed','error','f','timeout','cancelled','intervention-required'}
 RUNNING={'r','running','active'}
-QUEUED={'pd','pending','queued','ready','blocked'}
+QUEUED={'pd','pending','queued'}
 
 
 def stage_status(stage, attempts):
@@ -31,6 +31,8 @@ def stage_status(stage, attempts):
     if states & FAILED:return 'Failed'
     if states & RUNNING:return 'Running'
     if states & QUEUED:return 'Queued'
+    if 'blocked' in states:return 'Blocked'
+    if 'ready' in states:return 'Ready'
     if any(r['stage']==FINISH[stage] and r['state'] in {'success','complete','merged'} for r in latest.values()):
         return 'Approved' if stage in {'review','surfaces'} else 'Complete'
     if states and states<={'success','complete','merged'}:
@@ -69,6 +71,8 @@ def study_overview(db):
         elif 'Running' in states.values():status='Running'
         elif 'Queued' in states.values():status='Queued'
         elif 'Awaiting review' in states.values():status='Awaiting review'
+        elif 'Blocked' in states.values():status='Blocked'
+        elif 'Ready' in states.values():status='Ready'
         else:
             status='Incomplete'
             if any(f['finding_type']=='final-output-review' for f in fs):

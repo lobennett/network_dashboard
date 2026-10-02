@@ -48,3 +48,14 @@ def test_completed_subject_overrides_dataset_campaign_placeholder(study):
         db.execute("INSERT INTO stage_attempts VALUES ('fmriprep-complete','sub-s03','success')")
     value=client(study).get('/api/overview').json()['subjects'][0]
     assert value['stages']['fmriprep']=='Complete'
+
+
+def test_ready_and_blocked_campaigns_are_not_submitted_jobs(study):
+    for state, expected in [('ready', 'Ready'), ('blocked', 'Blocked'), ('pending', 'Queued')]:
+        with sqlite3.connect(study[1]) as db:
+            db.execute("DELETE FROM stage_attempts")
+            db.execute("INSERT INTO stage_attempts VALUES ('fmriprep','dataset',?)", (state,))
+        value = client(study).get('/api/overview').json()['subjects'][0]
+        assert value['stages']['fmriprep'] == expected
+        assert value['status'] == expected
+        assert value['focus_stage'] == 'fmriprep'
