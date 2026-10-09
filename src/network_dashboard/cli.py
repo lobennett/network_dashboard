@@ -53,7 +53,7 @@ def connect_main(argv):
     if any(reference_args) and not all(reference_args):
         parser.error('provide --reference-study, --reference-index and --reference-subject together')
     try:
-        remote = RemoteStudy(args.ssh, args.study, args.index, args.cache)
+        remote = RemoteStudy(args.ssh, args.study, args.index, args.cache, progress=True)
         app = create_app(remote.index, remote.study, args.web, allowed_origins=[args.origin], fetcher=remote.fetch,
                          archive_fetcher=remote.fetch_archive)
         remote.authenticate()
@@ -66,5 +66,5 @@ def connect_main(argv):
     except (HTTPException, ValueError, OSError, subprocess.SubprocessError) as error:
         parser.error(str(getattr(error, 'detail', error)))
     destination = f'http://127.0.0.1:{args.port}' if args.web else args.origin
-    print(f'Open {destination}. Leave this terminal running.\nCache: {remote.cache}', flush=True)
+    print(f'\nReady — click to open the dashboard:\n{destination}\n\nLeave this terminal running. Cache: {remote.cache}', flush=True)
     uvicorn.run(app, host='127.0.0.1', port=args.port)

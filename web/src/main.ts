@@ -24,7 +24,7 @@ app.innerHTML = `<a class="skip-link" href="#review-page">Skip to content</a>
 <div class="workspace" id="review-page"><aside><h2>Subjects</h2><nav id="subjects" aria-label="Subjects"></nav><p class="aside-note">Read-only review<br>Recorded in DataLad</p><a class="aside-help" href="/connect.html">Connection help</a></aside>
 <main><div id="notice" role="alert"></div><div class="subject-heading"><div><h1 id="subject-title">Review data</h1><p class="subject-caption">Follow a processing step, or browse Current files.</p></div><details class="download-menu"><summary>Download records</summary><div id="manifest-downloads" class="manifest-downloads"></div></details></div>
 <details class="subject-status"><summary>Subject status and checks</summary><div id="subject-summary"></div><div id="subject-completion"></div></details><div id="workflow"></div><div id="stage-detail"></div><div id="source-content"></div>
-<section class="review-workspace" aria-label="Scan review"><div class="scan-section"><div class="scan-section-heading"><h2>Scans</h2><span id="scan-counts" class="muted"></span></div><div id="scan-list"></div></div><article id="inspector" aria-label="Selected scan"></article></section>
+<section class="review-workspace" aria-label="Scan review" hidden><div class="scan-section"><div class="scan-section-heading"><h2>Scans</h2><span id="scan-counts" class="muted"></span></div><div id="scan-list"></div></div><article id="inspector" aria-label="Selected scan"></article></section>
 </main></div><main id="pipeline-page" hidden></main><main id="coverage-page" hidden></main><main id="overview-page" hidden></main><main id="exclusions-page" hidden></main>`;
 const find = <T extends HTMLElement = HTMLElement>(id: string) =>
   document.getElementById(id) as T;

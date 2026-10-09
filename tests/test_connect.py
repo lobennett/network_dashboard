@@ -265,3 +265,40 @@ def test_local_write_failure_does_not_recommend_ssh_authentication(tmp_path):
     assert 'No space left on device' in raised.value.detail
     assert 'local' in raised.value.detail
     assert 'authenticate' not in raised.value.detail
+
+
+def test_progress_connection_reuses_unchanged_index(study, tmp_path, capsys):
+    from types import SimpleNamespace
+    from network_dashboard.remote import RemoteStudy
+    root, index = study
+    copied = []
+    local = transport(tmp_path)
+    def runner(command, **kwargs):
+        if shlex.split(command[-1])[0] == 'stat':
+            return SimpleNamespace(stdout=f'{index.stat().st_size} 100 200\n')
+        copied.append(command)
+        return local(command, **kwargs)
+    remote = RemoteStudy('user@host', root, index, tmp_path/'cache', runner=runner, progress=True)
+    remote.prepare()
+    downloads = len(copied)
+    remote.prepare()
+    assert len(copied) == downloads
+    assert '-C' in copied[0]
+    assert 'Snapshot unchanged' in capsys.readouterr().out
+
+
+def test_concurrent_fetches_share_one_verified_download(study, tmp_path):
+    from concurrent.futures import ThreadPoolExecutor
+    from network_dashboard.remote import RemoteStudy
+    root, index = study
+    copied = []
+    local = transport(tmp_path)
+    def runner(command, **kwargs):
+        copied.append(command[-1])
+        return local(command, **kwargs)
+    remote = RemoteStudy('user@host', root, index, tmp_path/'cache', runner=runner)
+    remote.prepare()
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        paths = list(pool.map(remote.fetch, ['report'] * 4))
+    assert all(p.read_text() == '<h1>Report</h1>' for p in paths)
+    assert sum('report.html' in command for command in copied) == 1

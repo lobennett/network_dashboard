@@ -6,12 +6,14 @@ holds the canonical data; the dashboard uses a disposable local cache.
 With uv, SSH, and a Sherlock account with russpold Oak access:
 
 ```bash
-uvx --python 3.12 --from https://network-dashboard-devloganbennetts-projects.vercel.app/downloads/network_dashboard-0.8.4-py3-none-any.whl network-dashboard connect --ssh YOUR_SUNET_ID@login.sherlock.stanford.edu --study /oak/stanford/groups/russpold/data/network_grant/bids --index /oak/stanford/groups/russpold/data/network_grant/network-dashboard-v1/records.sqlite
+uvx --python 3.12 --from https://network-dashboard-devloganbennetts-projects.vercel.app/downloads/network_dashboard-0.8.5-py3-none-any.whl network-dashboard connect --ssh YOUR_SUNET_ID@login.sherlock.stanford.edu --study /oak/stanford/groups/russpold/data/network_grant/bids --index /oak/stanford/groups/russpold/data/network_grant/network-dashboard-v1/records.sqlite
 ```
 
 Complete authentication, leave the command running, and open the
 [dashboard](https://network-dashboard-devloganbennetts-projects.vercel.app).
-Images and reports download when opened; restart the command to refresh records.
+The command shows download progress and an estimated remaining time. Unchanged
+snapshots and verified files reuse the cache. Images and reports download when
+opened; restart the command to check for updated records.
 No local DataLad installation is needed. See [setup](web/public/connect.html).
 
 **Study progress** shows every configured subject and recorded stage, with missing

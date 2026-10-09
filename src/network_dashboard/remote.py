@@ -7,7 +7,9 @@ import re
 import shlex
 import subprocess
 import tempfile
-from threading import RLock
+from threading import RLock, Event, Thread
+import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from fastapi import HTTPException
 
@@ -36,7 +38,7 @@ def default_cache(config: dict) -> Path:
 
 
 class RemoteStudy:
-    def __init__(self, host: str, source: Path, index: Path, cache: Path | None = None, *, runner=subprocess.run):
+    def __init__(self, host: str, source: Path, index: Path, cache: Path | None = None, *, runner=subprocess.run, progress=False):
         if not re.fullmatch(r'[A-Za-z0-9_][A-Za-z0-9_.@-]*', host):
             raise ValueError('SSH destination must be a host alias or user@hostname')
         if not source.is_absolute() or not index.is_absolute():
@@ -47,7 +49,10 @@ class RemoteStudy:
         self.cache = cache.expanduser().resolve()
         self.study, self.index = self.cache / 'study', self.cache / 'records.sqlite'
         self.runner = runner
+        self.progress = progress
+        self.index_size = 0
         self.lock = RLock()
+        self.artifact_locks = {}
         self.cache.mkdir(parents=True, exist_ok=True, mode=0o700)
         self.socket = self.cache / 'ssh.sock'
         self.ssh_options = ['-S', str(self.socket)]
@@ -70,8 +75,23 @@ class RemoteStudy:
         target.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
         with tempfile.NamedTemporaryFile(dir=target.parent, prefix='.download-', delete=False) as stream:
             temporary = Path(stream.name)
+            stop = Event()
+            monitor = None
+            if self.progress and source == self.remote_index:
+                def report():
+                    started = time.monotonic()
+                    while not stop.wait(1):
+                        size = temporary.stat().st_size
+                        elapsed = time.monotonic() - started
+                        rate = size / elapsed
+                        percent = min(100, size * 100 / self.index_size) if self.index_size else 0
+                        eta = f'{max(0, self.index_size-size)/rate:.0f}s remaining' if rate and self.index_size else 'estimating time…'
+                        bar = '#' * int(percent / 5) + '-' * (20-int(percent / 5))
+                        print(f'\r[{bar}] {percent:5.1f}% · {size/1e6:.1f} MB · {eta}', end='', flush=True)
+                monitor = Thread(target=report, daemon=True)
+                monitor.start()
             try:
-                self.runner(['ssh', *self.ssh_options, '-o', 'BatchMode=yes',
+                self.runner(['ssh', *(['-C'] if source == self.remote_index else []), *self.ssh_options, '-o', 'BatchMode=yes',
                              '-o', 'ConnectTimeout=15', self.host,
                              shlex.join(['cat', '--', str(source)])],
                             stdout=stream, stderr=subprocess.PIPE, check=True, timeout=600)
@@ -83,13 +103,36 @@ class RemoteStudy:
             except (OSError, subprocess.SubprocessError) as error:
                 raise download_error(error, self.host, source) from error
             finally:
+                stop.set()
+                if monitor:
+                    monitor.join()
+                    print(flush=True)
                 temporary.unlink(missing_ok=True)
 
     def prepare(self):
         """Refresh the index and privacy receipts; image bytes are fetched on click."""
         incoming = self.cache / 'index.pending'
+        signature = None
+        marker = self.cache / 'index-source.json'
+        if self.progress:
+            print('Checking the latest published dashboard snapshot…', flush=True)
+            result = self.runner(['ssh', *self.ssh_options, '-o', 'BatchMode=yes', self.host,
+                                  shlex.join(['stat', '-c', '%s %Y %i', '--', str(self.remote_index)])],
+                                 capture_output=True, text=True, check=True, timeout=30)
+            signature = result.stdout.strip()
+            self.index_size = int(signature.split()[0])
+        cached = bool(signature and self.index.is_file() and marker.is_file() and
+                      json.loads(marker.read_text()).get('signature') == signature)
         try:
-            self._download(self.remote_index, incoming)
+            if cached:
+                print('Snapshot unchanged; using the local cache.', flush=True)
+                incoming.write_bytes(self.index.read_bytes())
+            else:
+                if self.progress:
+                    print(f'Downloading dashboard index ({self.index_size/1e6:.1f} MB before compression)…', flush=True)
+                self._download(self.remote_index, incoming)
+            if self.progress:
+                print('Validating the snapshot…', flush=True)
             with connect(incoming) as db:
                 metadata = dict(db.execute('SELECT key,value FROM metadata'))
                 if metadata.get('schema_version') != '2' or db.execute('PRAGMA integrity_check').fetchone()[0] != 'ok':
@@ -100,6 +143,8 @@ class RemoteStudy:
                         raise ValueError('Dataset path leaves the local cache')
                     root.mkdir(parents=True, exist_ok=True)
             os.replace(incoming, self.index)
+            if signature:
+                marker.write_text(json.dumps({'signature': signature}) + '\n')
         finally:
             incoming.unlink(missing_ok=True)
         with connect(self.index) as db:
@@ -109,8 +154,21 @@ class RemoteStudy:
         for old in self.study.glob('**/code/network_fw2bids/defacing/*.json'):
             if old not in current:
                 old.unlink()
-        for row in receipts:
-            self.fetch(row['id'])
+        if self.progress:
+            print(f'Checking {len(receipts)} privacy receipts (cached files are reused)…', flush=True)
+        if self.progress and receipts:
+            started = time.monotonic()
+            with ThreadPoolExecutor(max_workers=4) as pool:
+                pending = [pool.submit(self.fetch, row['id']) for row in receipts]
+                for number, future in enumerate(as_completed(pending), 1):
+                    future.result()
+                    remaining = (time.monotonic() - started) / number * (len(receipts) - number)
+                    print(f'\rPrivacy checks: {number}/{len(receipts)} · about {remaining:.0f}s remaining', end='', flush=True)
+        else:
+            for row in receipts:
+                self.fetch(row['id'])
+        if self.progress:
+            print('\nSnapshot ready. Images and reports load when opened.', flush=True)
 
     def add_reference(self, pilot: 'RemoteStudy', subject: str):
         """Link completed pilot evidence in this cache; leave both studies unchanged."""
@@ -131,7 +189,9 @@ class RemoteStudy:
             self.fetch(identity)
 
     def fetch(self, identity: str) -> Path:
-        with self.lock, connect(self.index) as db:
+        with self.lock:
+            lock = self.artifact_locks.setdefault(identity, RLock())
+        with lock, connect(self.index) as db:
             row = db.execute('SELECT * FROM artifact_versions WHERE id=?', (identity,)).fetchone()
             if row is None:
                 raise HTTPException(404, 'Unknown artifact')
