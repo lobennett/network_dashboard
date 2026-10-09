@@ -258,14 +258,15 @@ if (import.meta.env.VITE_API_BASE_URL) {
   const connection = element("section", undefined, "connection");
   const instructions = element("a", "Get your connection command");
   instructions.href = "/connect.html";
+  const actions = element("div", undefined, "connection-actions");
+  actions.append(instructions, connect);
   connection.append(
     element("h2", "Connect through Sherlock"),
     element(
       "p",
       "Get your personalized command, run it in Terminal, then return here and connect. Allow local-network access if your browser asks.",
     ),
-    instructions,
-    connect,
+    actions,
     element(
       "p",
       "Study records and images travel directly from your local service to this browser. Vercel hosts only the interface.",
