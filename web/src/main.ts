@@ -20,9 +20,9 @@ import { completionChecklist, type Completion } from "./completion";
 
 const app = document.querySelector<HTMLDivElement>("#app")!;
 app.innerHTML = `<a class="skip-link" href="#review-page">Skip to content</a>
-<header><a class="brand" href="#review">Network<span>Data review</span></a><nav class="page-nav" aria-label="Pages"><a href="#overview">Study progress</a><a href="#review">Review data</a><a href="#exclusions">Exclusions</a><a href="#coverage">Data completeness</a><a href="#pipeline">Pipeline guide</a></nav><span id="freshness" role="status">Snapshot not loaded</span></header>
-<div class="workspace" id="review-page"><aside><h2>Subjects</h2><nav id="subjects" aria-label="Subjects"></nav><p class="aside-note">Read-only review<br>Recorded in DataLad</p><a class="aside-help" href="/connect.html">Connection help</a></aside>
-<main><div id="notice" role="alert"></div><div class="subject-heading"><div><h1 id="subject-title">Review data</h1><p class="subject-caption">Follow a processing step, or browse Current files.</p></div><details class="download-menu"><summary>Download records</summary><div id="manifest-downloads" class="manifest-downloads"></div></details></div>
+<header><a class="brand" href="#review">Network<span>Data review</span></a><nav class="page-nav" aria-label="Pages"><a href="#overview">Study progress</a><a href="#review" id="review-nav" hidden>Review data</a><a href="#exclusions">Exclusions</a><a href="#coverage">Data completeness</a><a href="#pipeline">Pipeline guide</a></nav><span id="freshness" role="status">Snapshot not loaded</span></header>
+<div id="notice" role="alert"></div><div class="workspace" id="review-page"><aside><h2>Subjects</h2><nav id="subjects" aria-label="Subjects"></nav><p class="aside-note">Read-only review<br>Recorded in DataLad</p><a class="aside-help" href="/connect.html">Connection help</a></aside>
+<main><div class="subject-heading"><div><h1 id="subject-title">Review data</h1><p class="subject-caption">Follow a processing step, or browse Current files.</p></div><details class="download-menu"><summary>Download records</summary><div id="manifest-downloads" class="manifest-downloads"></div></details></div>
 <details class="subject-status"><summary>Subject status and checks</summary><div id="subject-summary"></div><div id="subject-completion"></div></details><div id="workflow"></div><div id="stage-detail"></div><div id="source-content"></div>
 <section class="review-workspace" aria-label="Scan review" hidden><div class="scan-section"><div class="scan-section-heading"><h2>Scans</h2><span id="scan-counts" class="muted"></span></div><div id="scan-list"></div></div><article id="inspector" aria-label="Selected scan"></article></section>
 </main></div><main id="pipeline-page" hidden></main><main id="coverage-page" hidden></main><main id="overview-page" hidden></main><main id="exclusions-page" hidden></main>`;
@@ -163,6 +163,8 @@ async function chooseSubject(subject: string) {
     const value = await get<Subject>(`subjects/${encodeURIComponent(subject)}`);
     if (current !== request) return;
     data = value;
+    find("review-nav").hidden = value.entities.length === 0;
+    route();
     const savedScan=new URL(location.href).searchParams.get("scan");
     const focus=new URL(location.href).searchParams.get('focus');
     selectedScan=(focus?scanForDestination(rawScans(value),focus):undefined)??value.entities.find(e=>e.entity_key===savedScan)??initialScan(value);
@@ -254,23 +256,25 @@ if (import.meta.env.VITE_API_BASE_URL) {
     if (studyConnected) connection.remove();
   };
   const connection = element("section", undefined, "connection");
-  const instructions = element("a", "Setup instructions");
+  const instructions = element("a", "Get your connection command");
   instructions.href = "/connect.html";
   connection.append(
     element("h2", "Connect through Sherlock"),
     element(
       "p",
-      "Start the local study service using your Sherlock account and russpold Oak access. Then connect and allow this site to access your local network when your browser asks.",
+      "Get your personalized command, run it in Terminal, then return here and connect. Allow local-network access if your browser asks.",
     ),
-    connect,
     instructions,
+    connect,
     element(
       "p",
       "Study records and images travel directly from your local service to this browser. Vercel hosts only the interface.",
       "muted",
     ),
   );
-  find("notice").before(connection);
+  const connectionPage = element("main");
+  connectionPage.append(connection);
+  app.insertBefore(connectionPage, find("review-page"));
 } else {
   void start();
 }
@@ -334,7 +338,7 @@ async function showCoverage() {
 let studyPageRequest=0;
 async function showStudyPage(){
  const kind=location.hash==='#exclusions'?'exclusions':'overview',host=find(`${kind}-page`),current=++studyPageRequest;
- if(!studyConnected){const link=element('a','Connect on Review data');link.href='#review';host.replaceChildren(element('h1',kind==='overview'?'Study progress':'Exclusions'),link);return;}
+ if(!studyConnected){host.replaceChildren(element('h1',kind==='overview'?'Study progress':'Exclusions'),element('p','Connect to your local study using the connection panel above.','muted'));return;}
  host.replaceChildren(element('p','Loading recorded study snapshot…','muted'));
  const select=async(subject:string,stage:Stage)=>{location.hash='review';const loading=chooseSubject(subject),selection=request;await loading;if(selection===request&&data?.entities.some(e=>e.subject===subject))chooseStage(stage);};
  try{
@@ -343,7 +347,8 @@ async function showStudyPage(){
  }catch(error){if(current===studyPageRequest)host.replaceChildren(element('p',`Study snapshot unavailable: ${error}. Restart with connector 0.8.0 or newer.`,'gap'));}
 }
 function route() {
- const page=['overview','exclusions','pipeline','coverage'].includes(location.hash.slice(1))?location.hash.slice(1):'review';
+ const requested=location.hash.slice(1);
+ const page=requested==='review'&&data?.entities.length?'review':['overview','exclusions','pipeline','coverage'].includes(requested)?requested:'overview';
  for(const id of ['review','pipeline','coverage','overview','exclusions'])find(`${id}-page`).hidden=id!==page;
  if(page==='coverage')void showCoverage();
  if(page==='overview'||page==='exclusions')void showStudyPage();

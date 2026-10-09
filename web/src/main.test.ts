@@ -125,7 +125,7 @@ it("an open page marks an aging index as not live", async () => {
   );
 });
 
-it("offers the pipeline guide before connecting and returns to review", async () => {
+it("offers the pipeline guide before connecting and hides empty review", async () => {
   vi.stubEnv("VITE_API_BASE_URL", "http://127.0.0.1:18782");
   await import("./main");
   location.hash = "pipeline";
@@ -135,7 +135,9 @@ it("offers the pipeline guide before connecting and returns to review", async ()
   expect(get).not.toHaveBeenCalled();
   location.hash = "review";
   window.dispatchEvent(new Event("hashchange"));
-  expect(document.getElementById("review-page")!.hidden).toBe(false);
+  expect(document.getElementById("review-page")!.hidden).toBe(true);
+  expect(document.getElementById("overview-page")!.hidden).toBe(false);
+  expect(document.getElementById("review-nav")!.hidden).toBe(true);
 });
 
 it('clears old source buttons before a new subject finishes loading',async()=>{

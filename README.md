@@ -3,7 +3,9 @@
 Read-only review of Network scans, decisions, and file provenance. Oak/DataLad
 holds the canonical data; the dashboard uses a disposable local cache.
 
-With uv, SSH, and a Sherlock account with russpold Oak access:
+With uv, SSH, and a Sherlock account with russpold Oak access, use the
+[connection page](https://network-dashboard-devloganbennetts-projects.vercel.app/connect.html)
+to enter your SUNet ID and copy a personalized command. Alternatively:
 
 ```bash
 uvx --python 3.12 --from https://network-dashboard-devloganbennetts-projects.vercel.app/downloads/network_dashboard-0.8.5-py3-none-any.whl network-dashboard connect --ssh YOUR_SUNET_ID@login.sherlock.stanford.edu --study /oak/stanford/groups/russpold/data/network_grant/bids --index /oak/stanford/groups/russpold/data/network_grant/network-dashboard-v1/records.sqlite
