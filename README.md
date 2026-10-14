@@ -8,7 +8,7 @@ With uv, SSH, and a Sherlock account with russpold Oak access, use the
 to enter your SUNet ID and copy a personalized command. Alternatively:
 
 ```bash
-uvx --python 3.12 --from https://network-dashboard-devloganbennetts-projects.vercel.app/downloads/network_dashboard-0.9.1-py3-none-any.whl network-dashboard connect --ssh YOUR_SUNET_ID@login.sherlock.stanford.edu --study /oak/stanford/groups/russpold/data/network_grant/bids --index /oak/stanford/groups/russpold/data/network_grant/network-dashboard-v1/records.sqlite
+uvx --python 3.12 --from https://network-dashboard-devloganbennetts-projects.vercel.app/downloads/network_dashboard-0.9.2-py3-none-any.whl network-dashboard connect --ssh YOUR_SUNET_ID@login.sherlock.stanford.edu --study /oak/stanford/groups/russpold/data/network_grant/bids --index /oak/stanford/groups/russpold/data/network_grant/network-dashboard-v1/records.sqlite
 ```
 
 Complete authentication, leave the command running, and open the
@@ -24,6 +24,7 @@ file history stay beside the viewer. **Analysis exports** downloads scope-specif
 scan manifests with exclusions, input identities and dataset commits.
 
 For an existing local DataLad clone, use `network-dashboard --study PATH --index PATH`.
+This local-only mode opens downloaded files; `connect --ssh` fetches uncached files from Oak.
 See [sharing](docs/sharing.md) for deployment and [analysis handoff](docs/analysis-handoff.md)
 for timing, exclusions, downloadable manifests, and saved design previews.
 

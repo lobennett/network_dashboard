@@ -223,16 +223,20 @@ async function start() {
     studyConnected=true;
     const update = () => {
       const warning = find("connector-warning");
-      warning.hidden = Array.isArray(metadata.capabilities) && metadata.capabilities.includes("approved_analysis_exports");
-      if (!warning.hidden) {
+      const outdated = !Array.isArray(metadata.capabilities) || !metadata.capabilities.includes("approved_analysis_exports");
+      warning.hidden = !outdated && metadata.file_access !== "local";
+      if (outdated) {
         const link = element("a", "Get the updated connection command"); link.href = "/connect.html";
         warning.replaceChildren(document.createTextNode("Your connector needs an update for analysis exports and historical images. "), link);
+      } else if (metadata.file_access === "local") {
+        const link = element("a", "Connect to Oak"); link.href = "/connect.html";
+        warning.replaceChildren(document.createTextNode("Local files only. Files not downloaded cannot open in this session. "), link);
       }
       const built = Date.parse(String(metadata.built_at ?? "")),
         valid = Number.isFinite(built);
       const old = metadata.stale || !valid || Date.now() - built > 900_000;
       find("freshness").textContent =
-        `${metadata.data_mode === "synthetic" ? "Synthetic / " : ""}${old ? "Snapshot (not live)" : "Snapshot"}: ${valid ? new Date(built).toLocaleString() : "time unknown"}`;
+        `${metadata.data_mode === "synthetic" ? "Synthetic / " : ""}${old ? "Snapshot (not live)" : "Snapshot"}: ${valid ? new Date(built).toLocaleString() : "time unknown"}${metadata.file_access === "oak" ? " · Oak files on demand" : metadata.file_access === "local" ? " · Local files only" : ""}`;
     };
     update();
     window.setInterval(update, 60_000);

@@ -55,6 +55,7 @@ def create_app(index: Path, study: Path, web: Path | None = None, *, allowed_ori
             age = None
         return {**value, "age_seconds": age, "stale": age is None or age > 900,
                 "conversion_links": conversion_links,
+                "file_access": "oak" if fetcher else "local",
                 "capabilities": ["analysis_exports", "approved_analysis_exports", "historical_locations"]}
 
     @app.get('/api/overview')
@@ -213,8 +214,14 @@ def create_app(index: Path, study: Path, web: Path | None = None, *, allowed_ori
                         item['fetch_available'] = bool(fetcher and verifiable(item['content_id'])
                                                        and available != 'unavailable' and (not historical or retained))
                         if not item['preview_available'] and not item['fetch_available']:
-                            item['preview_reason'] = ('Historical bytes have not been published for this version.' if historical
-                                                      else 'This recorded file is unavailable in the published snapshot.')
+                            if historical and not retained:
+                                item['preview_reason'] = 'Historical bytes have not been published for this version.'
+                            elif not verifiable(item['content_id']):
+                                item['preview_reason'] = 'This file has no verifiable content checksum.'
+                            elif not fetcher and available != 'unavailable':
+                                item['preview_reason'] = 'File not downloaded. This server serves local files only; use the Oak connection command to fetch it.'
+                            else:
+                                item['preview_reason'] = 'This recorded file is unavailable in the published snapshot.'
                     except HTTPException as error:
                         item.update(preview_available=False, preview_reason=error.detail,
                                     fetch_available=False)

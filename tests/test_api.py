@@ -50,6 +50,22 @@ def test_metadata_exposes_refresh_age_and_source(study):
     assert result["schema_version"] == "2"
     assert result["stale"] is True
     assert result["conversion_links"] == 0
+    assert result["file_access"] == "local"
+
+
+def test_remote_files_are_offered_without_requiring_a_cached_copy(study):
+    from network_dashboard.api import create_app
+    with sqlite3.connect(study[1]) as db:
+        db.execute('INSERT INTO artifact_versions VALUES (?,?,?,?,?)',
+                   ('uncached', 'study', 'run_bold.nii.gz', 'sha256:' + 'a' * 64, '{}'))
+    local = next(row for row in client(study).get('/api/artifacts?preview=true').json() if row['id'] == 'uncached')
+    assert not local['preview_available'] and not local['fetch_available']
+    assert 'not downloaded' in local['preview_reason']
+    assert 'unavailable in the published' not in local['preview_reason']
+    remote = TestClient(create_app(study[1], study[0], fetcher=lambda identity: None))
+    assert remote.get('/api/metadata').json()['file_access'] == 'oak'
+    offered = next(row for row in remote.get('/api/artifacts?preview=true').json() if row['id'] == 'uncached')
+    assert offered['fetch_available'] and not offered['preview_available']
 
 
 def test_content_is_registered_hashed_and_sandboxed(study):
@@ -194,6 +210,7 @@ def test_preview_search_marks_missing_and_unsafe_files_without_serving_them(stud
     result = client(study).get('/api/artifacts?preview=true').json()
     availability = {r['id']:r['preview_available'] for r in result}
     assert availability == {'missing':False,'report':True,'unsafe':False}
+    assert 'no verifiable content checksum' in next(r for r in result if r['id']=='missing')['preview_reason']
     assert 'defacing' in next(r for r in result if r['id']=='unsafe')['preview_reason']
 
 

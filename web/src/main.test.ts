@@ -39,6 +39,18 @@ it("opens Current files by default and keeps explicit stage deep links", async (
   expect(new URL(location.href).searchParams.get("stage")).toBe("mriqc");
   expect(document.querySelector<HTMLSelectElement>(".review-controls select")?.value).toBe("mriqc");
 });
+it.each(["local", "oak"])("labels %s file access independently of the snapshot date", async (mode) => {
+  responses(() => Promise.resolve({}));
+  const original = vi.mocked(get).getMockImplementation()!;
+  vi.mocked(get).mockImplementation((path: string) => path === "metadata"
+    ? Promise.resolve({ built_at: new Date().toISOString(), capabilities: ["approved_analysis_exports"], file_access: mode }) as never
+    : original(path));
+  await import("./main");
+  await vi.waitFor(() => expect(document.getElementById("freshness")?.textContent).toContain(
+    mode === "oak" ? "Oak files on demand" : "Local files only"));
+  expect(document.getElementById("connector-warning")?.hidden).toBe(mode === "oak");
+  if (mode === "local") expect(document.getElementById("connector-warning")?.textContent).toContain("not downloaded");
+});
 it("switches the whole review to Current files from a historical-only stage", async () => {
   history.replaceState(null, "", "/?stage=bids&subject=s03&scan=scan");
   responses((path) => Promise.reject(new Error(path)));
