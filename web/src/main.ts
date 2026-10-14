@@ -257,8 +257,11 @@ async function start() {
         "No subjects indexed. Build records from the canonical study first.";
     route();
   } catch (error) {
-    find("notice").textContent = `Cannot load the study: ${error}`;
-    find("freshness").textContent = "Index unavailable";
+    const unreachable = !!import.meta.env.VITE_API_BASE_URL && error instanceof TypeError;
+    find("notice").textContent = unreachable
+      ? "Cannot reach the local connector. Keep its Terminal command running. In this website’s browser settings, allow Local network access, then click Connect to local study again."
+      : `Cannot load the study: ${error}`;
+    find("freshness").textContent = unreachable ? "Connector unreachable" : "Index unavailable";
   }
 }
 if (import.meta.env.VITE_API_BASE_URL) {

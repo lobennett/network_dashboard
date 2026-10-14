@@ -27,6 +27,15 @@ it("waits for a connection click before accessing the local network", async () =
   await vi.waitFor(() => expect(document.querySelector(".scan-name")).not.toBeNull());
   expect(document.querySelector(".connection")).toBeNull();
 });
+it("explains local-network access when the browser cannot reach the connector", async () => {
+  vi.stubEnv("VITE_API_BASE_URL", "http://127.0.0.1:18782");
+  vi.mocked(get).mockRejectedValue(new TypeError("Failed to fetch"));
+  await import("./main");
+  document.querySelector<HTMLButtonElement>(".connection button")!.click();
+  await vi.waitFor(() => expect(document.getElementById("notice")?.textContent).toContain("Local network access"));
+  expect(document.getElementById("freshness")?.textContent).toBe("Connector unreachable");
+  expect(document.querySelector<HTMLButtonElement>(".connection button")!.disabled).toBe(false);
+});
 it("opens Current files by default and keeps explicit stage deep links", async () => {
   responses(() => Promise.resolve({}));
   await import("./main");
