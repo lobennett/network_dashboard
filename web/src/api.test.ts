@@ -45,6 +45,6 @@ it('downloads through a CORS fetch and a local blob, not a cross-site API naviga
 it('allows a large file to finish after the old two-minute cutoff',async()=>{
  vi.useFakeTimers();vi.stubGlobal('fetch',vi.fn().mockImplementation((_url,options)=>new Promise((resolve,reject)=>{options.signal.addEventListener('abort',()=>reject(new DOMException('Aborted','AbortError')));setTimeout(()=>resolve(new Response('large image')),125000);})));
  const {fileBlob}=await import('./api');
- const result=fileBlob('large');const checked=expect(result).resolves.toBeInstanceOf(Blob);
+ const result=fileBlob('large');const checked=expect(result).resolves.toMatchObject({size:11,type:'text/plain;charset=utf-8'});
  await vi.advanceTimersByTimeAsync(125000);await checked;vi.useRealTimers();vi.unstubAllGlobals();
 });

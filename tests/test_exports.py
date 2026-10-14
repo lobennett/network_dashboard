@@ -9,6 +9,8 @@ def database():
     CREATE TABLE metadata(key,value); INSERT INTO metadata VALUES ('study_commit','abc'),('built_at','today');
     CREATE TABLE entities(entity_key,namespace,subject,session,task,run,acquisition,suffix,echo);
     INSERT INTO entities VALUES ('one','raw','s03','01','goNogo','1',NULL,'bold',NULL),('two','raw','s03','02','goNogo','1',NULL,'bold',NULL),('rest','raw','s03','01','rest','1',NULL,'bold',NULL);
+    CREATE TABLE stage_attempts(stage,scope,state); INSERT INTO stage_attempts VALUES ('scan-decisions-approved','dataset','success');
+    CREATE TABLE findings(entity_key,finding_type,evidence_json);
     CREATE TABLE decisions(entity_key,scope,decision,reason,reviewer);
     INSERT INTO decisions VALUES ('one','preprocessing','keep',NULL,'LB'),('one','task_first_level','exclude','timing','LB'),('two','preprocessing','drop','aborted','LB');
     CREATE TABLE artifacts(path,kind,commit_hash);
@@ -69,7 +71,7 @@ def test_padded_run_names_match_and_mixed_campaign_inputs_do_not():
     assert analysis_manifest(db,'task_first_level')['scans'][0]['selection']=='candidate'
     db.execute("UPDATE artifact_versions SET dataset_id='different-campaign' WHERE id='2'")
     db.execute('CREATE TABLE archived_inputs(archive_id,member,path,details)')
-    assert analysis_manifest(db,'task_first_level')['scans'][0]['selection']=='missing_inputs'
+    assert analysis_manifest(db,'task_first_level')['scans'][0]['selection']=='inventory_pending'
 
 
 def test_partial_decision_is_reported_and_blocks_ambiguous_candidates():
@@ -88,3 +90,44 @@ def test_legacy_snapshot_does_not_claim_archived_data_are_missing():
     db.execute("DELETE FROM decisions WHERE scope='task_first_level'")
     db.execute("DELETE FROM artifact_versions WHERE id='1'")
     assert analysis_manifest(db,'task_first_level')['scans'][0]['selection']=='inventory_pending'
+
+
+def test_draft_keep_and_pending_flags_are_not_approval():
+    db=database()
+    db.execute("DELETE FROM stage_attempts")
+    assert analysis_manifest(db,'preprocessing')['scans'][0]['selection']=='undecided'
+    db.execute("INSERT INTO stage_attempts VALUES ('scan-decisions-approved','dataset','success')")
+    db.execute("INSERT INTO findings VALUES ('one','scan-review',?)",(json.dumps({'approval_required':'yes','approved':'no'}),))
+    assert analysis_manifest(db,'preprocessing')['scans'][0]['selection']=='undecided'
+
+
+def test_task_filter_keeps_subject_level_exclusions():
+    db=database();db.execute("DELETE FROM decisions WHERE scope='task_first_level'")
+    db.execute("INSERT INTO entities VALUES ('partial','raw','s03',NULL,NULL,NULL,NULL,'bold',NULL)")
+    db.execute("INSERT INTO decisions VALUES ('partial','task_first_level','exclude','Subject exclusion','LB')")
+    result=analysis_manifest(db,'task_first_level',task='goNogo')
+    assert result['unmatched_decisions'][0]['entity_key']=='partial'
+    assert result['scans'][0]['selection']=='undecided'
+
+
+def test_archive_inventory_is_per_scan_and_absence_is_explicit():
+    db=database();db.execute("DELETE FROM decisions WHERE scope='task_first_level'")
+    db.execute("DELETE FROM artifact_versions WHERE id='1'")
+    db.execute('CREATE TABLE archived_inputs(archive_id,member,path,details)')
+    assert analysis_manifest(db,'task_first_level')['scans'][0]['selection']=='inventory_pending'
+    path='sub-s03_ses-01_task-goNogo_run-1_space-T1w_desc-preproc_bold.nii.gz'
+    value={'path':path,'availability':'archived_unavailable','archive_content_id':'sha256:zip'}
+    db.execute('INSERT INTO archived_inputs VALUES (?,?,?,?)',('zip','missing',path,json.dumps(value)))
+    assert analysis_manifest(db,'task_first_level')['scans'][0]['selection']=='archived_unavailable'
+
+
+def test_multiple_complete_campaigns_require_a_choice():
+    db=database();db.execute("DELETE FROM decisions WHERE scope='task_first_level'")
+    for identity in ['1','2']:
+        row=db.execute('SELECT path,content_id FROM artifact_versions WHERE id=?',(identity,)).fetchone()
+        db.execute('INSERT INTO artifact_versions VALUES (?,?,?,?)',('other'+identity,'other',*row))
+        db.execute('INSERT INTO artifact_observations VALUES (?,?,?)',('other'+identity,'othercommit','available'))
+    scan=analysis_manifest(db,'task_first_level')['scans'][0]
+    assert scan['selection']=='ambiguous_derivative_set'
+    assert scan['inputs']['preprocessed_bold']==[]
+    assert len(scan['derivative_sets'])==2

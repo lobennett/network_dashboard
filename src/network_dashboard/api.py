@@ -55,7 +55,7 @@ def create_app(index: Path, study: Path, web: Path | None = None, *, allowed_ori
             age = None
         return {**value, "age_seconds": age, "stale": age is None or age > 900,
                 "conversion_links": conversion_links,
-                "capabilities": ["analysis_exports", "historical_locations"]}
+                "capabilities": ["analysis_exports", "approved_analysis_exports", "historical_locations"]}
 
     @app.get('/api/overview')
     def overview():

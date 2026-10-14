@@ -12,10 +12,13 @@ it. Each row retains its selection, reasons, recorded decisions, input identitie
 and dataset commits. Preprocessing exclusions apply to every downstream scope;
 task-model exclusions do not automatically exclude time-series analysis.
 
-- `candidate`: preprocessing retention is recorded and required inputs are indexed.
+- `candidate`: the scan-review milestone is approved, required row reviews are approved,
+  preprocessing retention is recorded, and one complete input set is indexed.
 - `candidate_archived`: the same, with BOLD stored in a pinned fMRIPrep ZIP; extract
   the listed member before analysis. The archive checksum identifies that input.
 - `inventory_pending`: this snapshot lacks the archive inventory; refresh after publication.
+- `archived_unavailable`: the recorded archive is absent at the publication target.
+- `ambiguous_derivative_set`: more than one complete campaign exists; choose explicitly.
 - `excluded`, `undecided`, `missing_inputs`, `not_applicable`: do not silently include
   these rows. Source acquisitions skipped before conversion are listed separately.
 

@@ -223,7 +223,7 @@ async function start() {
     studyConnected=true;
     const update = () => {
       const warning = find("connector-warning");
-      warning.hidden = Array.isArray(metadata.capabilities) && metadata.capabilities.includes("analysis_exports");
+      warning.hidden = Array.isArray(metadata.capabilities) && metadata.capabilities.includes("approved_analysis_exports");
       if (!warning.hidden) {
         const link = element("a", "Get the updated connection command"); link.href = "/connect.html";
         warning.replaceChildren(document.createTextNode("Your connector needs an update for analysis exports and historical images. "), link);

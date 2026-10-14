@@ -133,5 +133,6 @@ def exclusions_tsv(value):
     fields=['snapshot_built_at','study_commit','subject','session','task','run','stage','scope','decision','reason','reviewer','reviewed_at','preprocessing','source_id','label']
     writer=csv.DictWriter(stream,fieldnames=fields,delimiter='\t',lineterminator='\n');writer.writeheader()
     for row in value['rows']:
-        writer.writerow({'snapshot_built_at':value['snapshot'].get('built_at'),'study_commit':value['snapshot'].get('study_commit'),**row})
+        output={'snapshot_built_at':value['snapshot'].get('built_at'),'study_commit':value['snapshot'].get('study_commit'),**row}
+        writer.writerow({k:("'"+v if isinstance(v,str) and v.startswith(('=','+','-','@')) else v) for k,v in output.items()})
     return stream.getvalue()

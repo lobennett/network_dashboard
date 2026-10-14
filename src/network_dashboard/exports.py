@@ -78,7 +78,7 @@ def _required_inputs(inputs, scope):
                                             for role in ('preprocessed_bold', 'confounds'))}
                            for identity, items in grouped.items()]
         complete = [group for group in derivative_sets if group['complete']]
-        required = {role: [f for group in complete for f in group['inputs'][role]]
+        required = {role: [f for group in complete for f in group['inputs'][role]] if len(complete)==1 else []
                     for role in ('preprocessed_bold', 'confounds')}
         if scope == 'task_first_level':
             required['events'] = roles['events']
@@ -95,32 +95,50 @@ def analysis_manifest(db, scope, *, subject=None, task=None):
     for row in rows(db, 'SELECT * FROM decisions'):
         decisions[row['entity_key']].append(row)
     files, known_raw = _inputs(db)
-    archive_inventory = bool(db.execute("SELECT 1 FROM sqlite_master WHERE name='archived_inputs'").fetchone())
+    from .completion import latest_state
+    attempts = rows(db, "SELECT * FROM stage_attempts WHERE stage='scan-decisions-approved'")
+    reviews = defaultdict(list)
+    for row in rows(db, "SELECT * FROM findings WHERE finding_type='scan-review'"):
+        reviews[row['entity_key']].append(json.loads(row['evidence_json']))
     entities = rows(db, "SELECT * FROM entities WHERE namespace='raw' AND suffix='bold' AND (echo IS NULL OR echo='') ORDER BY subject,session,task,run")
     matches = lambda entity: ((not subject or entity['subject'] == subject.removeprefix('sub-'))
                               and (not task or entity['task'] == task.removeprefix('task-')))
     scans = []
     unmatched = []
-    for entity in filter(matches, entities):
+    for entity in entities:
         ds = decisions[entity['entity_key']]
         if _key(entity) not in known_raw:
+            if ((subject and entity['subject'] and entity['subject']!=subject.removeprefix('sub-'))
+                or (task and entity['task'] and entity['task']!=task.removeprefix('task-'))):
+                continue
             unmatched.extend({**d, 'match_status': 'no_indexed_raw_scan',
                               'entities': {k: entity.get(k) for k in ('subject', 'session', 'task', 'run', 'acquisition')}}
                              for d in ds if d['scope'] in {scope, 'preprocessing'})
             continue
+        if not matches(entity):
+            continue
         pre = [d for d in ds if d['scope'] == 'preprocessing']
         chosen = [d for d in ds if d['scope'] == scope]
         excluded = [d for d in pre + chosen if d['decision'] in EXCLUDED]
-        explicit_keep = any(d['decision'] in {'keep', 'include', 'approve'} for d in pre)
-        required, missing, derivative_sets = _required_inputs(files[_key(entity)], scope)
+        approved = latest_state(attempts,'scan-decisions-approved',entity['subject'])=='complete'
+        pending = any((r.get('approval_required')=='yes' or r.get('flags')) and r.get('approved')!='yes'
+                      for r in reviews[entity['entity_key']])
+        explicit_keep = approved and not pending and any(d['decision'] in {'keep', 'include', 'approve'} for d in pre)
+        inputs = files[_key(entity)]
+        archive_inventory = any('archive_id' in item for item in inputs)
+        archive_unavailable = any(item['availability']=='archived_unavailable' for item in inputs)
+        required, missing, derivative_sets = _required_inputs(inputs, scope)
         if excluded:
             selection = 'excluded'
         elif scope == 'task_first_level' and entity['task'] == 'rest':
             selection = 'not_applicable'
         elif not explicit_keep:
             selection = 'undecided'
+        elif sum(group['complete'] for group in derivative_sets)>1:
+            selection = 'ambiguous_derivative_set'
         elif missing:
-            selection = ('inventory_pending' if scope!='preprocessing' and not archive_inventory
+            selection = ('archived_unavailable' if archive_unavailable else
+                         'inventory_pending' if scope!='preprocessing' and not archive_inventory
                          and {'preprocessed_bold','confounds'} & set(missing) else 'missing_inputs')
         elif any(items and all(f['availability'] == 'archived' for f in items) for items in required.values()):
             selection = 'candidate_archived'
@@ -129,7 +147,8 @@ def analysis_manifest(db, scope, *, subject=None, task=None):
         scans.append({**{k: entity.get(k) for k in ('entity_key', 'subject', 'session', 'task', 'run', 'acquisition')},
                       'selection': selection,
                       'reasons': list(dict.fromkeys(d.get('reason') or 'Recorded exclusion' for d in excluded)),
-                      'missing_inputs': missing, 'preprocessing_decisions': pre,
+                      'missing_inputs': missing, 'approval_milestone_recorded': approved,
+                      'preprocessing_decisions': pre,
                       'scope_decisions': chosen, 'inputs': required, 'derivative_sets': derivative_sets})
     for scan in scans:
         ambiguous = [row for row in unmatched if all(not value or str(scan.get(key) or '') == str(value)
@@ -140,17 +159,17 @@ def analysis_manifest(db, scope, *, subject=None, task=None):
     return {'schema_version': 1, 'scope': scope,
             'snapshot': {k: metadata.get(k) for k in ('study_id', 'study_commit', 'built_at', 'publication_audited_at')},
             'filters': {'subject': subject, 'task': task},
-            'interpretation': 'Candidate means recorded preprocessing retention with a complete input set and no recorded exclusion for this scope. Candidate_archived requires extraction of the pinned archive members. Inventory_pending means archive membership has not yet been published; it does not establish missing data. Choose one complete derivative set; never mix campaigns. This is not approval of a model or every time-series method. Review unmatched decisions before using the manifest. Do not trim canonical BOLD/confounds or shift canonical events again.',
+            'interpretation': 'Candidate requires a successful scan-decisions-approved milestone, no outstanding required scan review, recorded preprocessing retention, a complete input set and no recorded exclusion for this scope. Candidate_archived requires extraction of the pinned archive members. Inventory_pending means archive membership has not yet been published; it does not establish missing data. Choose one complete derivative set; never mix campaigns. This is not approval of a model or every time-series method. Review unmatched decisions before using the manifest. Do not trim canonical BOLD/confounds or shift canonical events again.',
             'datasets': rows(db, "SELECT path,kind,commit_hash FROM artifacts WHERE kind='dataset' OR kind LIKE 'dataset:%'"),
             'counts': {state: sum(s['selection'] == state for s in scans) for state in
-                       ('candidate', 'candidate_archived', 'excluded', 'undecided', 'inventory_pending', 'missing_inputs', 'not_applicable')},
+                       ('candidate', 'candidate_archived', 'excluded', 'undecided', 'inventory_pending', 'archived_unavailable', 'ambiguous_derivative_set', 'missing_inputs', 'not_applicable')},
             'unmatched_decisions': unmatched, 'scans': scans}
 
 
 def analysis_tsv(manifest):
     stream = io.StringIO()
     fields = ['scope', 'study_commit', 'snapshot_built_at', 'subject', 'session', 'task', 'run', 'acquisition',
-              'selection', 'reasons', 'missing_inputs', 'preprocessing_decisions', 'scope_decisions', 'inputs',
+              'selection', 'reasons', 'missing_inputs', 'approval_milestone_recorded', 'preprocessing_decisions', 'scope_decisions', 'inputs',
               'derivative_sets']
     writer = csv.DictWriter(stream, fieldnames=fields, delimiter='\t', lineterminator='\n')
     writer.writeheader()
