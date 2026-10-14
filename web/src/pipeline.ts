@@ -72,7 +72,7 @@ export const stages = [
   },
   {
     id: "registration",
-    title: "Registration review",
+    title: "Registration reports",
     caption: "fmriprepviz 0.1.0",
     description:
       "After fMRIPrep merges, fmriprepviz overlays the approved FreeSurfer ribbon on each T1w-space BOLD reference. Inspect the subject's interactive flipbook for misregistration across scans and sessions. Outputs and input checksums are saved in DataLad; this does not approve scans for analysis.",
