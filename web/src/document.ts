@@ -1,12 +1,13 @@
+import {rawBehaviorTable,type Table} from './task-preview';
 import {receiptSummary} from './receipt';
-import { apiUrl } from "./api";
+import { fileBlob, fileText, get, downloadFile } from "./api";
 import { element } from "./review";
 
 /** Fetch through the allowed origin; keep report scripts in an opaque sandbox. */
 export async function openRecordedFile(id: string, path: string) {
   const dialog = element("dialog", "", "document-preview");
   const close = element("button", "Close report");
-  const status = element("p", "Loading…");
+  const status = element("p", "Fetching and verifying the report from Oak… First load may take longer; Close cancels the request.");
   let blobUrl: string | undefined;
   const controller = new AbortController();
   close.onclick = () => dialog.close();
@@ -19,17 +20,15 @@ export async function openRecordedFile(id: string, path: string) {
   document.body.append(dialog);
   dialog.showModal();
   try {
-    const response = await fetch(
-      apiUrl(`artifacts/${encodeURIComponent(id)}/content`),
-      {
-        credentials: "include",
-        signal: controller.signal,
-      },
-    );
-    if (!response.ok)
-      throw new Error((await response.json()).detail ?? "File unavailable");
+    if(/_beh\.csv$/i.test(path)){
+      const table=await get<Table>(`artifacts/${encodeURIComponent(id)}/table`);
+      if(!dialog.isConnected)return;
+      const download=element('button','Download recorded file','text-button');
+      download.onclick=async()=>{download.disabled=true;try{await downloadFile(id,path.split('/').pop()!);}catch(error){dialog.append(element('p',String(error),'gap'));}finally{download.disabled=false;}};
+      status.replaceWith(rawBehaviorTable(table),download);return;
+    }
     if(/\.(png|jpg)$/i.test(path)){
-      const blob=await response.blob();
+      const blob=await fileBlob(id,controller.signal);
       if(!dialog.isConnected)return;
       blobUrl=URL.createObjectURL(new Blob([blob],{type:path.endsWith('.png')?'image/png':'image/jpeg'}));
       const img=element('img');img.src=blobUrl;img.alt=path.split('/').pop()??'QC image';img.style.maxWidth='100%';
@@ -37,14 +36,14 @@ export async function openRecordedFile(id: string, path: string) {
       status.replaceWith(link,img);return;
     }
     if(path.endsWith('.pdf')){
-      const blob=await response.blob();
+      const blob=await fileBlob(id,controller.signal);
       if(!dialog.isConnected)return;
       blobUrl=URL.createObjectURL(new Blob([blob],{type:'application/pdf'}));
       const download=element('a','Download PDF');download.href=blobUrl;download.download=path.split('/').pop()??'report.pdf';
       const object=element('object');object.setAttribute('type','application/pdf');object.setAttribute('data',blobUrl);object.setAttribute('aria-label',download.download);object.append(element('p','PDF preview unavailable. Use Download PDF.'));
       status.replaceWith(download,object);return;
     }
-    const text = await response.text();
+    const text = await fileText(id,controller.signal);
     if (!dialog.isConnected) return;
     if (path.endsWith(".html")) {
       const frame = element("iframe");

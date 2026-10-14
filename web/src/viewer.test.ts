@@ -45,7 +45,7 @@ it("fetches authenticated bytes and revokes the temporary viewer URL", async () 
   await viewFile(document.createElement("canvas"), "id", "scan_bold.nii.gz");
   expect(request).toHaveBeenCalledWith(
     "https://data.example.edu/api/artifacts/id/content",
-    expect.objectContaining({ credentials: "include" }),
+    expect.objectContaining({ credentials: "omit" }),
   );
   expect(mocks.load).toHaveBeenCalledWith([
     { url: "blob:preview", name: "scan_bold.nii.gz" },

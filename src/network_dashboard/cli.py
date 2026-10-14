@@ -3,6 +3,7 @@ import argparse
 from pathlib import Path
 import sys
 import subprocess
+import socket
 
 import uvicorn
 
@@ -52,8 +53,18 @@ def connect_main(argv):
     reference_args = (args.reference_study, args.reference_index, args.reference_subject)
     if any(reference_args) and not all(reference_args):
         parser.error('provide --reference-study, --reference-index and --reference-subject together')
+    listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     try:
-        remote = RemoteStudy(args.ssh, args.study, args.index, args.cache)
+        listener.bind(('127.0.0.1', args.port))
+        listener.listen(128)
+    except OSError:
+        listener.close()
+        parser.error(f'Port {args.port} is already in use. A connector may already be running. '
+                     'Open the dashboard using that terminal, or press Ctrl+C in it before restarting. '
+                     'No download or SSH login was started.')
+    try:
+        remote = RemoteStudy(args.ssh, args.study, args.index, args.cache, progress=True)
         app = create_app(remote.index, remote.study, args.web, allowed_origins=[args.origin], fetcher=remote.fetch,
                          archive_fetcher=remote.fetch_archive)
         remote.authenticate()
@@ -64,7 +75,20 @@ def connect_main(argv):
             pilot.prepare()
             remote.add_reference(pilot, args.reference_subject)
     except (HTTPException, ValueError, OSError, subprocess.SubprocessError) as error:
+        listener.close()
+        if 'remote' in locals():
+            remote.close()
         parser.error(str(getattr(error, 'detail', error)))
+    except BaseException:
+        listener.close()
+        if 'remote' in locals():
+            remote.close()
+        raise
     destination = f'http://127.0.0.1:{args.port}' if args.web else args.origin
-    print(f'Open {destination}. Leave this terminal running.\nCache: {remote.cache}', flush=True)
-    uvicorn.run(app, host='127.0.0.1', port=args.port)
+    print(f'\nReady — click to open the dashboard:\n{destination}\n\nLeave this terminal running. Cache: {remote.cache}', flush=True)
+    try:
+        server = uvicorn.Server(uvicorn.Config(app, host='127.0.0.1', port=args.port))
+        server.run(sockets=[listener])
+    finally:
+        remote.close()
+        listener.close()

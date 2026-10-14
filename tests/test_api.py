@@ -180,6 +180,8 @@ def test_one_defaced_input_does_not_clear_another_undefaced_image(study, relatio
     import json
     receipt.write_text(json.dumps({"status": "success", "images": [
         {"path": paths["safe"], "output_sha256": hashlib.sha256(b"safe").hexdigest()}]}))
+    with sqlite3.connect(index) as db:
+        db.execute('INSERT INTO artifact_versions VALUES (?,?,?,?,?)', ('receipt','study',receipt.relative_to(root).as_posix(),'sha256:'+hashlib.sha256(receipt.read_bytes()).hexdigest(),'{}'))
     assert client(study).get("/api/artifacts/safe/content").status_code == 200
     assert client(study).get("/api/artifacts/output/content").status_code == 403
 
@@ -265,3 +267,16 @@ def test_split_reports_follow_selected_session(study):
              'sub-s030_anat.html', 'figures/sub-s03_ses-11_func.html')])
     result = client(study).get('/api/artifacts?subject=s03&dataset_stage=fmriprep&q=sub-s03_ses-11_task-rest_&include_subject_report=true').json()
     assert {r['path'] for r in result} == {'sub-s03_anat.html', 'sub-s03_ses-11_func.html'}
+
+
+def test_historical_version_is_not_offered_from_current_oak_path(study):
+    from network_dashboard.api import create_app
+    with sqlite3.connect(study[1]) as db:
+        db.execute('CREATE TABLE artifact_observations (artifact_id TEXT, commit_hash TEXT, availability TEXT)')
+        db.execute("INSERT INTO artifact_versions VALUES ('old','study','old_bold.nii.gz',?,'{}')",
+                   ('sha256:' + 'a'*64,))
+        db.execute("INSERT INTO artifact_observations VALUES ('old',NULL,'historical')")
+    app = TestClient(create_app(index=study[1], study=study[0], fetcher=lambda identity: None))
+    old = next(row for row in app.get('/api/artifacts?preview=true').json() if row['id']=='old')
+    assert old['fetch_available'] is False
+    assert 'historical' in old['preview_reason'].lower()

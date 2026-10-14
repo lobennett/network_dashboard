@@ -187,3 +187,31 @@ it('shows output approval rather than surface approval during registration revie
  await new ScanInspector(panel).show({...data,decisions:[{scope:'output',decision:'approved',reviewer:'LB',reason:'Registration reviewed'}]},scan,'registration');
  expect(panel.textContent).toContain('Registration reviewed');expect(panel.textContent).toContain('LB');
 });
+
+it("hands historical-only BIDS scans to the review instead of mixing in current files", async () => {
+  const old={id:"old",path:"scan_bold.nii.gz",dataset_id:"raw",content_id:"old",preview_available:false,fetch_available:false,availability:"historical",preview_reason:"Historical bytes have not been published for this version."};
+  vi.mocked(get).mockResolvedValue([old]);
+  const panel=document.querySelector("article")!,openCurrent=vi.fn();
+  await new ScanInspector(panel,openCurrent).show(data,scan,"bids");
+  await vi.waitFor(()=>expect(panel.textContent).toContain('Original stage images are recorded'));
+  const button=Array.from(panel.querySelectorAll('button')).find(b=>b.textContent==='View current scan files')!;
+  button.click();
+  expect(openCurrent).toHaveBeenCalledWith(scan);
+  expect(get).not.toHaveBeenCalledWith(expect.stringContaining('current=true'));
+  expect(panel.textContent).toContain('Original stage images are recorded');
+});
+it("offers no current-files shortcut without a review callback", async () => {
+  vi.mocked(get).mockResolvedValue([{id:"old",path:"scan_bold.nii.gz",dataset_id:"raw",content_id:"old",availability:"historical",preview_reason:"Historical bytes have not been published for this version."}]);
+  const panel=document.querySelector("article")!;
+  await new ScanInspector(panel).show(data,scan,"bids");
+  await vi.waitFor(()=>expect(panel.textContent).toContain('Original stage images are recorded'));
+  expect(Array.from(panel.querySelectorAll('button')).some(b=>b.textContent==='View current scan files')).toBe(false);
+});
+it("does not infer that a flagged scan needs no approval when the requirement is unrecorded", async () => {
+  vi.mocked(get).mockResolvedValue([]);
+  const panel=document.querySelector("article")!;
+  const flagged={...data,findings:[{entity_key:"scan",finding_type:"scan-review",evidence_json:'{"flags":"high_motion"}'}]};
+  await new ScanInspector(panel).show(flagged,scan,"review");
+  expect(panel.textContent).toContain("Approval requirement unrecorded");
+  expect(panel.textContent).not.toContain("No manual approval required");
+});

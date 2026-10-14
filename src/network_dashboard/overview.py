@@ -11,7 +11,7 @@ FINISH = {'source':'conversion','bids':'bids-assembled','trim':'gs-posttrim',
           'surfaces':'surface-review-approved','fmriprep':'fmriprep-complete','registration':'fmriprepviz'}
 FAILED={'failed','error','f','timeout','cancelled','intervention-required'}
 RUNNING={'r','running','active'}
-QUEUED={'pd','pending','queued','ready','blocked'}
+QUEUED={'pd','pending','queued'}
 
 
 def stage_status(stage, attempts):
@@ -31,6 +31,8 @@ def stage_status(stage, attempts):
     if states & FAILED:return 'Failed'
     if states & RUNNING:return 'Running'
     if states & QUEUED:return 'Queued'
+    if 'blocked' in states:return 'Blocked'
+    if 'ready' in states:return 'Ready'
     if any(r['stage']==FINISH[stage] and r['state'] in {'success','complete','merged'} for r in latest.values()):
         return 'Approved' if stage in {'review','surfaces'} else 'Complete'
     if states and states<={'success','complete','merged'}:
@@ -58,6 +60,8 @@ def study_overview(db):
         fs=[f for f in findings if f['entity_key'] in keys]
         jobs=[a for a in attempts if a['scope'] in {'dataset',f'sub-{subject}'} or str(a['scope']).startswith(f'sub-{subject}/')]
         states={stage:stage_status(stage,jobs) for stage in PRODUCERS}
+        if states['source']=='Unrecorded' and any(f['finding_type']=='flywheel-acquisition' for f in fs):
+            states['source']='Inventory recorded'
         reviews=[json.loads(f['evidence_json']) for f in fs if f['finding_type']=='scan-review']
         required=sum(r.get('approval_required')=='yes' and r.get('approved')!='yes' for r in reviews)
         if required and states['review'] not in {'Failed','Running','Queued'}:states['review']='Awaiting review'
@@ -69,6 +73,8 @@ def study_overview(db):
         elif 'Running' in states.values():status='Running'
         elif 'Queued' in states.values():status='Queued'
         elif 'Awaiting review' in states.values():status='Awaiting review'
+        elif 'Blocked' in states.values():status='Blocked'
+        elif 'Ready' in states.values():status='Ready'
         else:
             status='Incomplete'
             if any(f['finding_type']=='final-output-review' for f in fs):
@@ -76,8 +82,18 @@ def study_overview(db):
                 completion=subject_completion(db,subject)
                 if completion['status']=='complete':status='Complete'
                 elif completion['status']=='awaiting-review':status='Awaiting review'
-        current='registration' if status=='Complete' else next((s for s,v in states.items() if v==status),None)
+            elif states['fmriprep']=='Complete' and states['registration']=='Complete':
+                project=json.loads(metadata.get('active_projects','{}')).get('fmriprep',{})
+                evidence=[(f,json.loads(f['evidence_json'])) for f in fs if f['finding_type'] in {'fmriprep-output-check','registration-output'}]
+                current_types={f['finding_type'] for f,value in evidence
+                               if project.get('commit') and value.get('source_commit')==project['commit']
+                               and (str(f.get('evidence_path') or '').startswith(str(project.get('path'))+'+review/')
+                                    or value.get('source_project')==project.get('path'))}
+                if current_types=={'fmriprep-output-check','registration-output'}:
+                    status='Outputs recorded'
+        current='registration' if status in {'Complete','Outputs recorded'} else next((s for s,v in states.items() if v==status),None)
         subjects.append({'subject':subject,'indexed':bool(own),'status':status,'focus_stage':current,
+                         'status_detail':'Final output review unrecorded' if status=='Outputs recorded' else '',
                          'reference_stages':json.loads(metadata.get('reference_stages','{}')).get(subject,{}),
                          'stages':states,'jobs':[a for a in jobs if a.get('job_id')],
                          'flagged':sum(bool(r.get('flags')) for r in reviews),'review_required':required,

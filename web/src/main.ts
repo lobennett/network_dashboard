@@ -4,7 +4,7 @@ import {overviewPage,exclusionsPage,type Overview,type Exclusions} from './overv
 import {b0Panel,type B0Inventory,type B0Check} from './b0';
 import "./styles.css";
 import "./layout.css";
-import { get, apiUrl } from "./api";
+import { get, apiUrl, downloadPath } from "./api";
 import { element, type RecordRow } from "./review";
 import { renderScans, scanForDestination } from "./scans";
 import { flywheelInventory } from "./flywheel";
@@ -20,21 +20,23 @@ import { completionChecklist, type Completion } from "./completion";
 
 const app = document.querySelector<HTMLDivElement>("#app")!;
 app.innerHTML = `<a class="skip-link" href="#review-page">Skip to content</a>
-<header><a class="brand" href="#review">Network<span>Data review</span></a><nav class="page-nav" aria-label="Pages"><a href="#overview">Study progress</a><a href="#review">Review data</a><a href="#exclusions">Exclusions</a><a href="#coverage">Data completeness</a><a href="#pipeline">Pipeline guide</a></nav><span id="freshness" role="status">Snapshot not loaded</span></header>
-<div class="workspace" id="review-page"><aside><h2>Subjects</h2><nav id="subjects" aria-label="Subjects"></nav><p class="aside-note">Read-only review<br>Recorded in DataLad</p><a class="aside-help" href="/connect.html">Connection help</a></aside>
-<main><div id="notice" role="alert"></div><div class="subject-heading"><div><h1 id="subject-title">Review data</h1><p class="subject-caption">Follow a processing step, or browse Current files.</p></div><details class="download-menu"><summary>Download records</summary><div id="manifest-downloads" class="manifest-downloads"></div></details></div>
+<header><a class="brand" href="#review">Network<span>Data review</span></a><nav class="page-nav" aria-label="Pages"><a href="#overview">Study</a><a href="#review" id="review-nav" hidden>Review data</a><a href="#exclusions">Analysis exports</a><a href="#pipeline">Guide</a></nav><span id="freshness" role="status">Snapshot not loaded</span></header>
+<div id="connector-warning" role="status" hidden></div><div id="notice" role="alert"></div><div class="workspace" id="review-page"><aside><h2>Subjects</h2><nav id="subjects" aria-label="Subjects"></nav><p class="aside-note">Read-only review<br>Recorded in DataLad</p><a class="aside-help" href="/connect.html">Connection help</a></aside>
+<main><div class="subject-heading"><div><h1 id="subject-title">Review data</h1></div><details class="download-menu"><summary>Download records</summary><div id="manifest-downloads" class="manifest-downloads"></div></details></div>
 <details class="subject-status"><summary>Subject status and checks</summary><div id="subject-summary"></div><div id="subject-completion"></div></details><div id="workflow"></div><div id="stage-detail"></div><div id="source-content"></div>
-<section class="review-workspace" aria-label="Scan review"><div class="scan-section"><div class="scan-section-heading"><h2>Scans</h2><span id="scan-counts" class="muted"></span></div><div id="scan-list"></div></div><article id="inspector" aria-label="Selected scan"></article></section>
-</main></div><main id="pipeline-page" hidden></main><main id="coverage-page" hidden></main><main id="overview-page" hidden></main><main id="exclusions-page" hidden></main>`;
+<section class="review-workspace" aria-label="Scan review" hidden><div class="scan-section"><div class="scan-section-heading"><h2>Scans</h2><span id="scan-counts" class="muted"></span></div><div id="scan-list"></div></div><article id="inspector" aria-label="Selected scan"></article></section>
+</main></div><main id="pipeline-page" hidden></main><nav class="study-tabs" id="study-tabs" aria-label="Study views" hidden><a href="#overview">Progress</a><a href="#coverage">Data completeness</a></nav><main id="coverage-page" hidden></main><main id="overview-page" hidden></main><main id="exclusions-page" hidden></main>`;
 const find = <T extends HTMLElement = HTMLElement>(id: string) =>
   document.getElementById(id) as T;
-const inspector = new ScanInspector(find("inspector"));
+const inspector = new ScanInspector(find("inspector"), scan => chooseStage("current", scan));
 const initialStage = new URL(location.href).searchParams.get("stage");
-let active: Stage = initialStage === "current" || stages.some(s => s.id === initialStage) ? initialStage as Stage : "source",
+let active: Stage = stages.some(s => s.id === initialStage) ? initialStage as Stage : "current",
+  historyStage: Stage = active === "current" ? "source" : active,
   data: Subject | undefined,
   selectedScan: RecordRow | undefined,
   request = 0;
 let studyConnected=false;
+let loadingSubject: string | undefined;
 let stageRequest=0, stageRecord:StageRecord|undefined;
 function stageData(value:Subject):Subject {
  return stageSubject(value,active,stageRecord);
@@ -66,6 +68,7 @@ function refreshScanList() {
 function chooseStage(stage: Stage, preferred?:RecordRow) {
   if(preferred)selectedScan=preferred;
   active = stage;
+  if(stage!=="current")historyStage=stage;
   stageRecord=undefined;
   const current=++stageRequest;
   if (!data) return;
@@ -74,13 +77,13 @@ function chooseStage(stage: Stage, preferred?:RecordRow) {
   const openStageFile=(file:StageFile,trace?:boolean)=>{
     if(!trace&&/\.(pdf|tsv|json|html|txt|csv|png|jpg)$/i.test(file.path)){void openRecordedFile(file.id,file.path);return;}
     document.querySelector<HTMLElement>(".review-workspace")!.hidden=false;
-    void inspector.showArtifact(file,stage==="b0"&&!trace?"current":stage,trace);
+    void inspector.showArtifact(file,stage,trace);
     find("inspector").scrollIntoView({block:"start"});
   };
   find("scan-list").replaceChildren(element("p","Loading stage records…","muted"));
   find("scan-counts").textContent="";
   find("notice").textContent="";
-  find("workflow").replaceChildren(reviewControls(stage, chooseStage, data));
+  find("workflow").replaceChildren(reviewControls(stage, s => chooseStage(s), data, historyStage));
   find("stage-detail").replaceChildren(stageReport(data,stage,undefined,openStageFile));
   document.querySelector<HTMLElement>(".review-workspace")!.hidden = (stage === "source" || stage === "trim" || stage === "b0" || stage === "events");
   find("source-content").replaceChildren();
@@ -90,7 +93,7 @@ function chooseStage(stage: Stage, preferred?:RecordRow) {
     if(!data||current!==stageRequest)return;
     const scans=rawScans(stageData(data));
     if(!subjectOutputs&&stage!=="source"&&!scans.some(s=>s.entity_key===selectedScan?.entity_key)){
-      if(preferred)find("notice").textContent="This scan has no recorded file versions or findings at this stage. Open Current files for the latest data.";
+      if(preferred)find("notice").textContent="This scan has no recorded file versions or findings at this stage.";
       else selectedScan=initialScan(stageData(data));
     }
     rememberSelection();
@@ -141,6 +144,7 @@ function chooseStage(stage: Stage, preferred?:RecordRow) {
   });
 }
 async function chooseSubject(subject: string) {
+  loadingSubject = subject;
   const current = ++request;
   stageRequest++;stageRecord=undefined;
   find("source-content").replaceChildren();
@@ -163,6 +167,8 @@ async function chooseSubject(subject: string) {
     const value = await get<Subject>(`subjects/${encodeURIComponent(subject)}`);
     if (current !== request) return;
     data = value;
+    find("review-nav").hidden = value.entities.length === 0;
+    route(false);
     const savedScan=new URL(location.href).searchParams.get("scan");
     const focus=new URL(location.href).searchParams.get('focus');
     selectedScan=(focus?scanForDestination(rawScans(value),focus):undefined)??value.entities.find(e=>e.entity_key===savedScan)??initialScan(value);
@@ -191,11 +197,10 @@ async function chooseSubject(subject: string) {
       ["json", "Provenance bundle (JSON)"],
     ]) {
       const link = element("a", label);
-      link.href = apiUrl(
-        `subjects/${encodeURIComponent(subject)}/manifest?format=${format}`,
-      );
-      link.target = "_blank";
-      link.rel = "noopener";
+      link.href = '#';
+      link.onclick = event => {event.preventDefault();void downloadPath(
+        `subjects/${encodeURIComponent(subject)}/manifest?format=${format}`,`sub-${subject}_manifest.${format}`
+      ).catch(error=>{find('notice').textContent=String(error);});};
       downloads.append(link);
     }
     const outcomes = rawScans(data).map((scan) => scanOutcome(value, scan));
@@ -204,7 +209,10 @@ async function chooseSubject(subject: string) {
     chooseStage(active);
   } catch (error) {
     if (current === request) find("notice").textContent = String(error);
+  } finally {
+    if(current===request){loadingSubject=undefined;route(!data);}
   }
+
 }
 async function start() {
   try {
@@ -214,6 +222,12 @@ async function start() {
     ]);
     studyConnected=true;
     const update = () => {
+      const warning = find("connector-warning");
+      warning.hidden = Array.isArray(metadata.capabilities) && metadata.capabilities.includes("analysis_exports");
+      if (!warning.hidden) {
+        const link = element("a", "Get the updated connection command"); link.href = "/connect.html";
+        warning.replaceChildren(document.createTextNode("Your connector needs an update for analysis exports and historical images. "), link);
+      }
       const built = Date.parse(String(metadata.built_at ?? "")),
         valid = Number.isFinite(built);
       const old = metadata.stale || !valid || Date.now() - built > 900_000;
@@ -233,12 +247,11 @@ async function start() {
     if (subjects.length) {
       const savedSubject=new URL(location.href).searchParams.get("subject");
       await chooseSubject(subjects.find(s=>s.subject===savedSubject)?.subject??subjects[0].subject);
-      if (location.hash === "#coverage") await showCoverage();
 
     } else
       find("notice").textContent =
         "No subjects indexed. Build records from the canonical study first.";
-    if (["#overview","#exclusions"].includes(location.hash)) await showStudyPage();
+    route();
   } catch (error) {
     find("notice").textContent = `Cannot load the study: ${error}`;
     find("freshness").textContent = "Index unavailable";
@@ -254,23 +267,26 @@ if (import.meta.env.VITE_API_BASE_URL) {
     if (studyConnected) connection.remove();
   };
   const connection = element("section", undefined, "connection");
-  const instructions = element("a", "Setup instructions");
+  const instructions = element("a", "Get your connection command");
   instructions.href = "/connect.html";
+  const actions = element("div", undefined, "connection-actions");
+  actions.append(instructions, connect);
   connection.append(
     element("h2", "Connect through Sherlock"),
     element(
       "p",
-      "Start the local study service using your Sherlock account and russpold Oak access. Then connect and allow this site to access your local network when your browser asks.",
+      "Get your personalized command, run it in Terminal, then return here and connect. Allow local-network access if your browser asks.",
     ),
-    connect,
-    instructions,
+    actions,
     element(
       "p",
       "Study records and images travel directly from your local service to this browser. Vercel hosts only the interface.",
       "muted",
     ),
   );
-  find("notice").before(connection);
+  const connectionPage = element("main");
+  connectionPage.append(connection);
+  app.insertBefore(connectionPage, find("review-page"));
 } else {
   void start();
 }
@@ -334,23 +350,29 @@ async function showCoverage() {
 let studyPageRequest=0;
 async function showStudyPage(){
  const kind=location.hash==='#exclusions'?'exclusions':'overview',host=find(`${kind}-page`),current=++studyPageRequest;
- if(!studyConnected){const link=element('a','Connect on Review data');link.href='#review';host.replaceChildren(element('h1',kind==='overview'?'Study progress':'Exclusions'),link);return;}
+ if(!studyConnected){host.replaceChildren(element('h1',kind==='overview'?'Study progress':'Analysis exports'),element('p','Connect to your local study using the connection panel above.','muted'));return;}
  host.replaceChildren(element('p','Loading recorded study snapshot…','muted'));
  const select=async(subject:string,stage:Stage)=>{location.hash='review';const loading=chooseSubject(subject),selection=request;await loading;if(selection===request&&data?.entities.some(e=>e.subject===subject))chooseStage(stage);};
  try{
   if(kind==='overview'){const value=await get<Overview>('overview');if(current===studyPageRequest)host.replaceChildren(overviewPage(value,select));}
   else {const value=await get<Exclusions>('exclusions');if(current===studyPageRequest)host.replaceChildren(exclusionsPage(value,select));}
- }catch(error){if(current===studyPageRequest)host.replaceChildren(element('p',`Study snapshot unavailable: ${error}. Restart with connector 0.8.0 or newer.`,'gap'));}
+ }catch(error){if(current===studyPageRequest)host.replaceChildren(element('p',`Study snapshot unavailable: ${error}. Restart using the current command on Connection help.`,'gap'));}
 }
-function route() {
- const page=['overview','exclusions','pipeline','coverage'].includes(location.hash.slice(1))?location.hash.slice(1):'review';
+function route(refresh = true) {
+ const requested=location.hash.slice(1).replace(/-page$/, "");
+ const page=requested==='review'&&(data?.entities.length||loadingSubject)?'review':['overview','exclusions','pipeline','coverage'].includes(requested)?requested:'overview';
  for(const id of ['review','pipeline','coverage','overview','exclusions'])find(`${id}-page`).hidden=id!==page;
- if(page==='coverage')void showCoverage();
- if(page==='overview'||page==='exclusions')void showStudyPage();
- document.title=`${({review:'Review data',pipeline:'Pipeline guide',coverage:'Data completeness',overview:'Study progress',exclusions:'Exclusions'} as Record<string,string>)[page]} · Network`;
- document.querySelectorAll<HTMLAnchorElement>('.page-nav a').forEach(a=>a.setAttribute('aria-current',a.hash===`#${page}`?'page':'false'));
- document.querySelector<HTMLAnchorElement>('.skip-link')!.href=`#${page}-page`;
- window.scrollTo(0,0);
+ if(refresh&&page==='coverage')void showCoverage();
+ if(refresh&&(page==='overview'||page==='exclusions'))void showStudyPage();
+ document.title=`${({review:'Review data',pipeline:'Pipeline guide',coverage:'Data completeness',overview:'Study progress',exclusions:'Analysis exports'} as Record<string,string>)[page]} · Network`;
+ // Data completeness lives under Study as a secondary tab.
+ const study=page==='overview'||page==='coverage';find('study-tabs').hidden=!study;
+ document.querySelectorAll<HTMLAnchorElement>('.study-tabs a').forEach(a=>a.setAttribute('aria-current',a.hash===`#${page}`?'page':'false'));
+ document.querySelectorAll<HTMLAnchorElement>('.page-nav a').forEach(a=>a.setAttribute('aria-current',a.hash===`#${study?'overview':page}`?'page':'false'));
+ find(`${page}-page`).tabIndex=-1;
+ const skip=document.querySelector<HTMLAnchorElement>('.skip-link')!;skip.href=`#${page}-page`;
+ skip.onclick=()=>find(`${page}-page`).focus({preventScroll:true});
+ if(refresh)window.scrollTo(0,0);
 }
-window.addEventListener("hashchange", route);
+window.addEventListener("hashchange", () => route(!location.hash.endsWith("-page")));
 route();

@@ -8,6 +8,8 @@ from fastapi import HTTPException
 
 def table_kind(path: str) -> str | None:
     name = Path(path).name.lower()
+    if name.endswith('_beh.csv'):
+        return 'behavior'
     if name.endswith('_events.tsv'):
         return 'events'
     if name.endswith(('.tsv', '.csv')) and any(x in name for x in ('designmatrix', 'design_matrix', 'design-matrix')):

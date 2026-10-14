@@ -14,9 +14,9 @@ export const stageMethods: Record<Stage,{tools:string;inputs:string;outputs:stri
  mriqc:{tools:'MRIQC 24.0.2 · network_fmri',inputs:'Prepared BIDS images.',outputs:'Image-quality metrics (IQMs), HTML reports and extraction receipts.',change:'Measure image quality. MRIQC does not exclude scans; its metrics inform the scan-review stage.'},
  review:{tools:'network_qa · network_fmri · manual review',inputs:'MRIQC metrics, echo completeness, scan lengths and behavioral findings.',outputs:'scan_decisions.tsv, approval records and curated BIDS.',change:'Record preprocessing retention separately from task-model exclusions. High motion is a review flag, not an automatic exclusion.'},
  surfaces:{tools:'FreeSurfer 8.2.0 · FSQC 2.1.4 · network_fmri · manual review',inputs:'Selected, defaced anatomical scans.',outputs:'Reconstruction, FSQC metrics and overlays, and surface_review.tsv.',change:'Reconstruct surfaces in parallel with MRIQC. Inspect and approve the reconstruction before fMRIPrep.'},
- fmriprep:{tools:'fMRIPrep 25.2.5 · BABS / MechaBABS · network_fmri',inputs:'Retained BIDS scans and the approved FreeSurfer 8.2 reconstruction.',outputs:'Preprocessed BOLD, surfaces, confounds, transforms and reports.',change:'Preprocess retained scans using approved surfaces. Do not trim canonical data again.'},
+ fmriprep:{tools:'fMRIPrep · BABS / MechaBABS · network_fmri',inputs:'Retained BIDS scans and the approved FreeSurfer 8.2 reconstruction.',outputs:'Preprocessed BOLD, surfaces, confounds, transforms and reports.',change:'Preprocess retained scans using approved surfaces. Do not trim canonical data again.'},
  registration:{tools:'fmriprepviz 0.1.0 · network_fmri · manual review',inputs:'T1w-space BOLD references and the approved FreeSurfer ribbon.',outputs:'Registration flipbook, input checksums and final approval.',change:'Overlay the ribbon on BOLD references to inspect alignment across runs. Final approval does not override analysis exclusions.'},
- current:{tools:'All recorded stages',inputs:'Current study inventory.',outputs:'Currently registered files, metrics and decisions.',change:'This view combines current results across stages. It is not a historical stage snapshot.'},
+ current:{tools:'All recorded stages',inputs:'Current study inventory.',outputs:'Currently registered files, metrics and decisions.',change:'Latest files, metrics and decisions across all stages; this is not a historical stage snapshot.'},
 };
 export function stageMetrics(data:Subject,scan:RecordRow,stage:Stage):RecordRow {
  if(stage==='review'||stage==='current') return reviewMetrics(data,scan);
@@ -49,14 +49,14 @@ function softwareText(software:unknown):string {
 }
 export function stageReport(data:Subject,stage:Stage,record:StageRecord|undefined,open:(file:StageFile,trace?:boolean)=>void):HTMLElement {
  const panel=element('section','','stage-report'), method=stageMethods[stage];
- const overview=element('div','','stage-overview');
- overview.append(element('h2',stage==='current'?'Current files':stages.find(s=>s.id===stage)?.title??stage),element('p',method.change));
- if(stage!=='current'){const flow=element('div','','stage-flow');for(const [heading,text] of [['Inputs',method.inputs],['Outputs',method.outputs]]){const item=element('div');item.append(element('strong',heading),element('p',text));flow.append(item);}overview.append(flow);}
+ if(stage==='current'){panel.hidden=true;return panel;}
+ // Heading plus one sentence; the full method description stays in the collapsed details.
+ const overview=element('div','','stage-overview'),sentence=method.change.match(/^.+?\.(?=\s|$)/)?.[0]??method.change;
+ overview.append(element('h2',stages.find(s=>s.id===stage)?.title??stage),element('p',sentence));
  const io=element('dl','','stage-io');
- for(const [key,value] of [['Inputs',method.inputs],['Outputs',method.outputs],['Configured tools',method.tools]])io.append(element('dt',key),element('dd',value));
- const supporting=element('details','','stage-supporting');supporting.append(element('summary','Methods and provenance'),io);panel.append(overview);
+ for(const [key,value] of [...(sentence!==method.change?[['What changes',method.change]]:[]),['Inputs',method.inputs],['Outputs',method.outputs],['Configured tools',method.tools]])io.append(element('dt',key),element('dd',value));
+ const supporting=element('details','','stage-supporting');supporting.append(element('summary','Method, versions and provenance'),io);panel.append(overview);
  if(record){const download=element('button','Download stage record (JSON)','text-button');download.onclick=()=>{const url=URL.createObjectURL(new Blob([JSON.stringify(record,null,2)],{type:'application/json'}));const link=element('a');link.href=url;link.download=`sub-${record.subject}_${stage}_record.json`;link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};supporting.append(download);}
- if(stage==='current'){panel.append(supporting);return panel;}
  if(!record){panel.append(element('p','Loading recorded stage evidence…','muted'));return panel;}
  if(record.reference){const reference=element('aside','','stage-reference');reference.append(element('strong',record.reference.label),element('p','These completed outputs come from the pilot study. The full-sample campaign status and review decisions remain separate.'),element('small',`Source study commit: ${record.reference.study_commit}`));panel.append(reference);}
  const notStarted=!record.reference&&!record.outputs.length&&['fmriprep','registration'].includes(stage)&&!data.attempts.some(a=>a.stage==='fmriprep'&&['complete','success'].includes(String(a.state)));
@@ -80,7 +80,7 @@ export function stageReport(data:Subject,stage:Stage,record:StageRecord|undefine
  }else if(stage==='mriqc')changes.append(element('p','MRIQC produces metrics and reports. Scan exclusions belong to Scan review.'));
  else if(stage==='events')changes.append(element('p',`${record.findings.length} behavioral timing findings recorded. Task-model decisions belong to Scan review.`));
  else if(stage==='trim')changes.append(element('p','Volumes are removed, not whole scans. Actual removal counts require a recorded trimming receipt.'));
- else if(!notStarted&&!record.outputs.length&&!(record.supporting_files??[]).length)changes.append(element('p','Historical files unrecorded. Use Current files for the latest inventory.','gap'));
+ else if(!notStarted&&!record.outputs.length&&!(record.supporting_files??[]).length)changes.append(element('p','Historical files unrecorded for this stage; later files are not substituted.','gap'));
  if(changes.children.length>1)panel.append(changes);
  if(stage==='surfaces')panel.append(surfaceQCPanel(record,file=>open(file)));
  if(stage==='surfaces'||stage==='registration'&&!notStarted){
@@ -91,15 +91,15 @@ export function stageReport(data:Subject,stage:Stage,record:StageRecord|undefine
  }
  if(stage!=='source'){
   const files=element('details','','stage-output-files');files.append(element('summary',`Stage outputs (${record.outputs.length} recorded file versions)`));
-  if(!record.outputs.length)files.append(element('p',notStarted?'No outputs yet.':'Historical file inventory unrecorded. Current BIDS files are available under Current files; they are not substituted here.','gap'));
+  if(!record.outputs.length)files.append(element('p',notStarted?'No outputs yet.':'Historical file inventory unrecorded. Later files are not substituted here.','gap'));
   else {files.append(element('p','Exact transformation outputs and current stage derivatives are labeled separately. Older versions may be unavailable.','muted'));
-   for(const file of record.outputs.slice(0,100)){const row=element('div','','stage-file-row'),button=element('button',file.path,'text-button');button.onclick=()=>open(file);row.append(button,element('small',file.stage_basis==='recorded_transformation'?'Exact transformation output':'Current stage derivative'));files.append(row);}
+   for(const file of record.outputs.slice(0,100)){const row=element('div','','stage-file-row'),button=element('button',file.path.split('/').pop(),'text-button');button.title=file.path;button.onclick=()=>open(file);row.append(button,element('small',file.stage_basis==='recorded_transformation'?'Exact transformation output':'Current stage derivative'));files.append(row);}
    if(record.outputs.length>100)files.append(element('p',`Showing the first 100 of ${record.outputs.length} files. Select a scan below to narrow the list.`,'muted'));
   }
   supporting.append(files);
   const inputs=element('details','','stage-input-files');inputs.append(element('summary',`Recorded inputs (${record.inputs.length} file versions)`));
-  if(!record.inputs.length)inputs.append(element('p','Exact input file links unrecorded. The workflow inputs above describe the expected data.','muted'));
-  for(const file of record.inputs.slice(0,100)){const button=element('button',file.path,'text-button');button.title='Trace input history; original source images are not previewed here';button.onclick=()=>open(file,true);inputs.append(button);}
+  if(!record.inputs.length)inputs.append(element('p','Exact input file links unrecorded. The workflow inputs describe the expected data.','muted'));
+  for(const file of record.inputs.slice(0,100)){const button=element('button',file.path.split('/').pop(),'text-button');button.title=`${file.path} — trace input history; original source images are not previewed here`;button.onclick=()=>open(file,true);inputs.append(button);}
   if(record.inputs.length>100)inputs.append(element('p','Showing the first 100 inputs. Download the stage record for the complete list.','muted'));
   supporting.append(inputs);
  }

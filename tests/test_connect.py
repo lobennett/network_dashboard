@@ -265,3 +265,169 @@ def test_local_write_failure_does_not_recommend_ssh_authentication(tmp_path):
     assert 'No space left on device' in raised.value.detail
     assert 'local' in raised.value.detail
     assert 'authenticate' not in raised.value.detail
+
+
+def test_owned_ssh_session_lasts_until_connector_closes(tmp_path):
+    from network_dashboard.remote import RemoteStudy
+    from unittest.mock import Mock
+    calls=[]
+    process=Mock();process.poll.return_value=None
+    def start(command, **kwargs):
+        calls.append(command)
+        Path(command[command.index('-S')+1]).touch()
+        return process
+    def run(command, **kwargs):
+        return type('Result',(),{'returncode':0})()
+    remote=RemoteStudy('user@host',Path('/study'),Path('/index'),tmp_path,runner=run,session_factory=start)
+    remote.authenticate()
+    command=calls[0]
+    assert '-N' in command and '-M' in command
+    assert 'ControlPersist=no' in command
+    assert 'ServerAliveInterval=30' in command
+    assert not process.terminate.called
+    remote.close()
+    assert process.terminate.called and process.wait.called
+
+
+def test_slow_artifact_does_not_block_other_verified_files(study,tmp_path):
+    from network_dashboard.remote import RemoteStudy
+    from threading import Thread,Event
+    root,index=study
+    slow=root/'slow.html';slow.write_bytes(b'<h1>Slow report</h1>')
+    with sqlite3.connect(index) as db:
+        db.execute('INSERT INTO artifact_versions VALUES (?,?,?,?,?)',
+                   ('slow','study','slow.html','sha256:'+hashlib.sha256(slow.read_bytes()).hexdigest(),'{}'))
+    started,released,done=Event(),Event(),Event();errors=[];local=transport(tmp_path)
+    def runner(command,**kwargs):
+        if shlex.split(command[-1])[-1]==str(slow):
+            started.set();released.wait(3)
+        return local(command,**kwargs)
+    remote=RemoteStudy('user@host',root,index,tmp_path/'cache',runner=runner);remote.prepare()
+    def fetch(identity,finished=None):
+        try:remote.fetch(identity)
+        except Exception as error:errors.append(error)
+        finally:
+            if finished:finished.set()
+    first=Thread(target=fetch,args=('slow',));second=Thread(target=fetch,args=('report',done))
+    first.start()
+    try:
+        assert started.wait(1)
+        second.start()
+        assert done.wait(1),'An unrelated report waits for the slow download'
+    finally:
+        released.set();first.join(timeout=3)
+        if second.ident is not None:second.join(timeout=3)
+    assert not errors
+
+
+def test_progress_connection_reuses_unchanged_index(study, tmp_path, capsys):
+    from types import SimpleNamespace
+    from network_dashboard.remote import RemoteStudy
+    root, index = study
+    copied = []
+    local = transport(tmp_path)
+    def runner(command, **kwargs):
+        if shlex.split(command[-1])[0] == 'stat':
+            return SimpleNamespace(stdout=f'{index.stat().st_size} 100 200\n')
+        copied.append(command)
+        return local(command, **kwargs)
+    remote = RemoteStudy('user@host', root, index, tmp_path/'cache', runner=runner, progress=True)
+    remote.prepare()
+    downloads = len(copied)
+    remote.prepare()
+    assert len(copied) == downloads
+    assert '-C' in copied[0]
+    assert 'Snapshot unchanged' in capsys.readouterr().out
+
+
+def test_concurrent_fetches_share_one_verified_download(study, tmp_path):
+    from concurrent.futures import ThreadPoolExecutor
+    from network_dashboard.remote import RemoteStudy
+    root, index = study
+    copied = []
+    local = transport(tmp_path)
+    def runner(command, **kwargs):
+        copied.append(command[-1])
+        return local(command, **kwargs)
+    remote = RemoteStudy('user@host', root, index, tmp_path/'cache', runner=runner)
+    remote.prepare()
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        paths = list(pool.map(remote.fetch, ['report'] * 4))
+    assert all(p.read_text() == '<h1>Report</h1>' for p in paths)
+    assert sum('report.html' in command for command in copied) == 1
+
+
+def test_reference_import_invalidates_published_index_reuse_marker(study,tmp_path,monkeypatch):
+    from network_dashboard.remote import RemoteStudy
+    import shutil
+    root,index=study
+    remote=RemoteStudy('user@host',root,index,tmp_path/'active',runner=transport(tmp_path))
+    remote.prepare();marker=remote.cache/'index-source.json';marker.write_text('{}')
+    pilot=RemoteStudy('user@host',root.parent/'network-study-pilot-s03',index,tmp_path/'pilot')
+    pilot.index.write_bytes(index.read_bytes())
+    monkeypatch.setattr('network_dashboard.references.import_reference',lambda index,reference,output,**kwargs:shutil.copyfile(index,output))
+    remote.add_reference(pilot,'s03')
+    assert not marker.exists()
+
+
+def test_two_versions_share_a_target_lock_and_keep_distinct_verified_bytes(study,tmp_path):
+    from network_dashboard.remote import RemoteStudy
+    root,index=study;remote=RemoteStudy('user@host',root,index,tmp_path/'cache',runner=transport(tmp_path));remote.prepare()
+    old=remote.fetch('report');original=old.read_bytes()
+    (root/'report.html').write_bytes(b'<h1>New report</h1>')
+    digest='sha256:'+hashlib.sha256((root/'report.html').read_bytes()).hexdigest()
+    with sqlite3.connect(remote.index) as db:db.execute('INSERT INTO artifact_versions VALUES (?,?,?,?,?)',('report-new','study','report.html',digest,'{}'))
+    assert remote.artifact_lock('report') is remote.artifact_lock('report-new')
+    new=remote.fetch('report-new')
+    assert old.read_bytes()==original
+    assert new.read_bytes()==b'<h1>New report</h1>'
+
+
+def test_retained_history_fetches_original_without_overwriting_current(study, tmp_path):
+    from network_dashboard.remote import RemoteStudy
+    from network_dashboard.api import create_app
+    root,index=study
+    original=b'original report'
+    digest=hashlib.sha256(original).hexdigest()
+    location=f'code/network_fmri/publication/historical-files/{digest}'
+    (root/location).parent.mkdir(parents=True)
+    (root/location).write_bytes(original)
+    with sqlite3.connect(index) as db:
+        db.executescript('CREATE TABLE artifact_observations(artifact_id,commit_hash,availability); CREATE TABLE artifact_locations(artifact_id,location,availability);')
+        db.execute('INSERT INTO artifact_versions VALUES (?,?,?,?,?)',('old','study','report.html','sha256:'+digest,'{}'))
+        db.execute("INSERT INTO artifact_observations VALUES ('old',NULL,'historical')")
+        db.execute('INSERT INTO artifact_locations VALUES (?,?,?)',('old',location,'available'))
+    remote=RemoteStudy('user@host',root,index,tmp_path/'cache',runner=transport(tmp_path));remote.prepare()
+    api=TestClient(create_app(remote.index,remote.study,fetcher=remote.fetch))
+    assert api.get('/api/artifacts/old/content').content==original
+    assert api.get('/api/artifacts/report/content').text=='<h1>Report</h1>'
+    with sqlite3.connect(remote.index) as db:
+        db.execute("UPDATE artifact_locations SET location='../../secret' WHERE artifact_id='old'")
+    assert api.get('/api/artifacts/old/content').status_code==403
+
+
+def test_occupied_port_is_detected_before_authentication(monkeypatch,capsys):
+    import socket
+    from network_dashboard.cli import connect_main
+    from network_dashboard.remote import RemoteStudy
+    def forbidden(*args,**kwargs):
+        pytest.fail('Must not authenticate or download on occupied port')
+    monkeypatch.setattr(RemoteStudy,'authenticate',forbidden)
+    with socket.socket() as listener:
+        listener.bind(('127.0.0.1',0));listener.listen()
+        port=listener.getsockname()[1]
+        with pytest.raises(SystemExit):
+            connect_main(['--ssh','sherlock','--port',str(port)])
+    assert 'No download or SSH login was started' in capsys.readouterr().err
+
+
+def test_audited_missing_file_is_not_advertised_as_fetchable(study,tmp_path):
+    from network_dashboard.remote import RemoteStudy
+    from network_dashboard.api import create_app
+    root,index=study
+    with sqlite3.connect(index) as db:
+        db.executescript("CREATE TABLE artifact_locations(artifact_id,location,availability); INSERT INTO artifact_locations VALUES ('report',NULL,'unavailable');")
+    remote=RemoteStudy('user@host',root,index,tmp_path/'cache',runner=transport(tmp_path));remote.prepare()
+    api=TestClient(create_app(remote.index,remote.study,fetcher=remote.fetch))
+    assert api.get('/api/artifacts?preview=true').json()[0]['fetch_available'] is False
+    assert api.get('/api/artifacts/report/content').status_code==404

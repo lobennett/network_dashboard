@@ -3,14 +3,16 @@ import json
 import re
 from pathlib import Path
 import subprocess
+from functools import lru_cache
 
 from fastapi import HTTPException
 
-from network_dashboard.records import dataset_roots
+from network_dashboard.records import dataset_roots, published_location
 from network_dashboard.checksums import matches
 
 
-def content_path(db, study: Path, artifact: dict) -> Path:
+def allowed_path(db, study: Path, artifact: dict) -> Path:
+    """Check path and privacy without reading image bytes (used by file lists)."""
     relative = Path(artifact["path"])
     name = relative.name
     if relative.is_absolute() or ".." in relative.parts or "\\" in str(relative):
@@ -29,6 +31,15 @@ def content_path(db, study: Path, artifact: dict) -> Path:
     if image and not fieldmap and not name.endswith(("_bold.nii", "_bold.nii.gz")):
         if not _has_defacing_evidence(db, artifact, roots):
             raise HTTPException(403, "Image preview requires recorded defacing evidence")
+    try:
+        location = published_location(db, artifact)
+    except ValueError as error:
+        raise HTTPException(403, str(error)) from error
+    if location:
+        target = (study / location).resolve()
+        if not target.is_relative_to(study.resolve()):
+            raise HTTPException(403, 'Published file link leaves the study')
+        return target
     target = (root / relative).resolve()
     if not target.is_relative_to(root):
         # Worktree/submodule annex stores can live outside their working trees.
@@ -39,6 +50,11 @@ def content_path(db, study: Path, artifact: dict) -> Path:
             gitdir = ""
         if not gitdir or not target.is_relative_to((Path(gitdir) / "annex/objects").resolve()):
             raise HTTPException(403, "File link leaves its registered dataset")
+    return target
+
+
+def content_path(db, study: Path, artifact: dict) -> Path:
+    target = allowed_path(db, study, artifact)
     if not target.is_file():
         raise HTTPException(404, "Content is unavailable locally; retrieve it with DataLad")
     if not matches(target, artifact["content_id"]):
@@ -53,8 +69,12 @@ def _has_defacing_evidence(db, artifact, roots):
         ancestors = ancestors | {item["id"]}
         root = roots.get(item["dataset_id"])
         if root:
-            for receipt in root.glob("code/network_fw2bids/defacing/*.json"):
-                value = json.loads(receipt.read_text())
+            for row in db.execute("SELECT path,content_id FROM artifact_versions WHERE dataset_id=? AND path LIKE 'code/network_fw2bids/defacing/%.json'", (item['dataset_id'],)):
+                receipt = root / row['path']
+                if not receipt.is_file() or not receipt.resolve().is_relative_to(root.resolve()):
+                    continue
+                stat = receipt.stat()
+                value = _receipt(receipt, stat.st_mtime_ns, stat.st_size, row['content_id'])
                 if value.get("status") == "success" and any(
                     row.get("path") == item["path"] and "sha256:" + row.get("output_sha256", "") == item["content_id"]
                     for row in value.get("images", [])
@@ -78,3 +98,14 @@ def _has_defacing_evidence(db, artifact, roots):
                 return False
         return bool(images) and all(cleared(parent, ancestors) for parent in images)
     return cleared(artifact, set())
+
+
+@lru_cache(maxsize=512)
+def _receipt(path, modified, size, digest):
+    # The small privacy receipt must match its indexed version too.
+    if not matches(path, digest):
+        return {}
+    try:
+        return json.loads(path.read_text())
+    except (OSError, ValueError):
+        return {}

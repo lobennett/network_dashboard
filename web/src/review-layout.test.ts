@@ -26,23 +26,31 @@ it("opens a functional scan by default, but prioritizes pending reviews", () => 
     })?.entity_key,
   ).toBe("two");
 });
-it("makes all stages directly reachable without a stage dropdown", () => {
+it("reaches every stage from one compact history picker with status", () => {
   const select=vi.fn();
-  const controls=reviewControls("events",select);
-  expect(controls.querySelector('select')).toBeNull();
-  const button=Array.from(controls.querySelectorAll('button')).find(b=>b.textContent?.includes('Trim volumes'))!;
-  button.click();
+  const controls=reviewControls("events",select,data);
+  const picker=controls.querySelector<HTMLSelectElement>('select')!;
+  expect(picker.options).toHaveLength(10);
+  expect(picker.value).toBe('events');
+  expect(picker.options[0].textContent).toContain('Unrecorded');
+  picker.value='trim';picker.dispatchEvent(new Event('change'));
   expect(select).toHaveBeenCalledWith('trim');
-  expect(controls.textContent).toContain('Current files');
+  expect(controls.querySelectorAll('button')).toHaveLength(2);
+  expect(controls.querySelector('[aria-pressed="true"]')?.textContent).toBe('Processing history');
+  Array.from(controls.querySelectorAll('button')).find(b=>b.textContent==='Current files')!.click();
+  expect(select).toHaveBeenLastCalledWith('current');
 });
 it("does not describe absent reviews as approved", () => {
   expect(subjectSummary(data).textContent).toContain("Unrecorded");
   expect(subjectSummary(data).textContent).not.toContain("Approved");
 });
 
-it("keeps processing steps visible when browsing current files",()=>{
- const controls=reviewControls('current',vi.fn());
- expect(controls.querySelectorAll('button')).toHaveLength(11);
- expect(controls.querySelector('[aria-current="step"]')?.textContent).toBe('Current files');
- expect(controls.textContent).not.toContain('Stage history');
+it("labels current files as a separate mode and returns to the last history stage",()=>{
+ const select=vi.fn();
+ const controls=reviewControls('current',select,undefined,'mriqc');
+ expect(controls.querySelector('select')).toBeNull();
+ expect(controls.querySelector('[aria-pressed="true"]')?.textContent).toBe('Current files');
+ expect(controls.textContent).toContain('not evidence');
+ Array.from(controls.querySelectorAll('button')).find(b=>b.textContent==='Processing history')!.click();
+ expect(select).toHaveBeenCalledWith('mriqc');
 });

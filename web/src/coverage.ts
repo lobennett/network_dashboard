@@ -1,4 +1,4 @@
-import { get, apiUrl } from "./api";
+import { get, apiUrl, downloadFile } from "./api";
 import { element, details, type RecordRow } from "./review";
 import { behaviorSummary, type BehaviorSummary } from "./task-preview";
 export type CoverageScan = RecordRow & {
@@ -38,7 +38,8 @@ function fileLink(file: { id: string; path: string }) {
     file.path.split("/").pop() ?? file.path,
     "file-path",
   );
-  link.href = apiUrl(`artifacts/${file.id}/content`);
+  link.href = '#';
+  link.onclick = event => {event.preventDefault();void downloadFile(file.id,file.path.split('/').pop()!).catch(error=>{link.after(element('p',String(error),'gap'));});};
   link.target = "_blank";
   link.rel = "noopener";
   return link;

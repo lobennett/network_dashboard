@@ -1,4 +1,4 @@
-import { get, apiUrl } from "./api";
+import { get, downloadFile } from "./api";
 import { element } from "./review";
 
 export type BehaviorSummary = {
@@ -72,7 +72,7 @@ export function behaviorSummary(metrics: BehaviorSummary, path: string): HTMLEle
   return panel;
 }
 
-type Table = {
+export type Table = {
   kind: string;
   columns: string[];
   rows: Record<string, string>[];
@@ -89,7 +89,7 @@ type File = {
   content_id: string;
 };
 export const isTaskTable = (path: string) =>
-  /_events\.tsv$/i.test(path) ||
+  /_events\.tsv$/i.test(path) || /_beh\.csv$/i.test(path) ||
   /(?:designmatrix|design_matrix|design-matrix).*\.(csv|tsv)$/i.test(path);
 const number = (value: string | undefined) =>
   value?.trim() && Number.isFinite(Number(value)) ? Number(value) : NaN;
@@ -264,25 +264,38 @@ function designChart(table: Table): HTMLElement {
   draw();
   return panel;
 }
+export function rawBehaviorTable(data: Table): HTMLElement {
+  const panel=element('section');
+  panel.append(element('p',`Raw behavior: ${data.total_rows} rows. First 50 rows shown; original units and values retained.`,'muted'));
+  const scroll=element('div','','table-scroll'),table=element('table'),head=element('tr');
+  data.columns.forEach(column=>head.append(element('th',column)));table.append(head);
+  for(const row of data.rows.slice(0,50)){const tr=element('tr');data.columns.forEach(column=>tr.append(element('td',row[column]??'')));table.append(tr);}
+  scroll.style.overflowX='auto';scroll.style.maxWidth='100%';scroll.append(table);panel.append(scroll);return panel;
+}
 export async function taskPreview(
   host: HTMLElement,
   query: string,
   active: () => boolean,
 ) {
   host.replaceChildren(
-    element("p", "Loading event and design files…", "muted"),
+    element("p", "Loading raw behavior, events and saved designs…", "muted"),
   );
   try {
     const all = await get<File[]>(`artifacts?${query}&limit=1000`);
     if (!active()) return;
-    const files = all.filter((f) => isTaskTable(f.path));
+    // Current canonical behavior is supporting input, not a historical BIDS output.
+    const raw = query.includes('&stage=events')
+      ? await get<File[]>(`artifacts?${query.replace(/&stage=events/, '&current=true')}&limit=1000`)
+      : [];
+    if (!active()) return;
+    const files = [...all.filter((f) => isTaskTable(f.path)), ...raw.filter(f=>/_beh\.csv$/i.test(f.path))];
     const select = element("select");
-    select.setAttribute("aria-label", "Event or saved design file");
+    select.setAttribute("aria-label", "Raw behavior, event or saved design file");
     const display = element("div");
     files.forEach((f, i) => {
       const option = element(
         "option",
-        `${f.path.split("/").pop()} · ${f.dataset_id.slice(0, 8)} · ${f.content_id.slice(-8)}`,
+        `${f.path.split("/").pop()}${raw.includes(f) ? " · Current canonical input" : ""} · ${f.dataset_id.slice(0, 8)} · ${f.content_id.slice(-8)}`,
       );
       option.value = String(i);
       select.append(option);
@@ -290,7 +303,7 @@ export async function taskPreview(
     host.replaceChildren(
       element(
         "p",
-        "Recorded event timing and saved designs. This viewer does not generate a model or shift onsets.",
+        "Raw behavior is registered in sourcedata before event generation. network_events creates BIDS events after trimming. This viewer shows recorded values; it does not shift onsets or generate models.",
         "muted",
       ),
     );
@@ -324,10 +337,13 @@ export async function taskPreview(
         const table = await get<Table>(`artifacts/${file.id}/table`);
         if (!active() || current !== request) return;
         display.replaceChildren(element("p", file.path, "file-path"));
-        const download = element("a", "Download recorded file");
-        download.href = apiUrl(`artifacts/${file.id}/content`);
-        download.target = "_blank";
-        download.rel = "noopener";
+        const download = element("button", "Download recorded file", "text-button");
+        download.onclick = async () => {
+          download.disabled=true;download.textContent='Downloading…';
+          try {await downloadFile(file.id,file.path.split('/').pop()!);}
+          catch(error){display.append(element('p',String(error),'gap'));}
+          finally {download.disabled=false;download.textContent='Download recorded file';}
+        };
         display.append(download);
         if (table.behavior) display.append(behaviorSummary(table.behavior, file.path));
         if (table.truncated)
@@ -347,7 +363,7 @@ export async function taskPreview(
             ),
           );
         display.append(
-          table.kind === "events" ? eventTimeline(table) : designChart(table),
+          table.kind === "events" ? eventTimeline(table) : table.kind === "behavior" ? rawBehaviorTable(table) : designChart(table),
         );
       } catch (error) {
         if (active() && current === request)

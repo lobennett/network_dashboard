@@ -1,48 +1,30 @@
 # Analysis handoff
 
-The current Oak dataset is a **sub-s03 pilot**, not the final 46-subject release:
+The canonical 46-subject study is:
 
 ```text
 /oak/stanford/groups/russpold/data/network_grant/bids
 ```
 
-Use the dashboard's **Scan manifest (TSV)** for run-level decisions and **Provenance bundle (JSON)** for dataset commits, file checksums, availability, and recorded processing software. These are snapshots; pin the study and subdataset commits when starting an analysis. An indexed file may be historical or unavailable. Absence of an exclusion is not analysis approval.
+In **Analysis exports**, choose preprocessing, task first-level models, or time-series
+analysis and download a TSV or JSON manifest. Optional subject/task filters narrow
+it. Each row retains its selection, reasons, recorded decisions, input identities,
+and dataset commits. Preprocessing exclusions apply to every downstream scope;
+task-model exclusions do not automatically exclude time-series analysis.
 
-## Timing and exclusions
+- `candidate`: preprocessing retention is recorded and required inputs are indexed.
+- `candidate_archived`: the same, with BOLD stored in a pinned fMRIPrep ZIP; extract
+  the listed member before analysis. The archive checksum identifies that input.
+- `inventory_pending`: this snapshot lacks the archive inventory; refresh after publication.
+- `excluded`, `undecided`, `missing_inputs`, `not_applicable`: do not silently include
+  these rows. Source acquisitions skipped before conversion are listed separately.
 
-**Data completeness** separates missing images/sidecars, missing behavior/events,
-and analysis exclusions. Its expectations come from recorded acquisitions,
-in-scanner behavior and review records, not a complete protocol schedule.
-Behavior metrics summarize canonical test trials by run and condition: recorded
-accuracy, positive response times, no keypress, and go omissions. Denominators
-are shown; these descriptive metrics do not create exclusion decisions.
+Candidates are not approval of a particular model. Pin the exported snapshot and
+input commits. The per-subject provenance bundle includes software, checksums,
+findings and file history.
 
-- The canonical BOLD data have the first seven volumes removed upstream. Canonical events use the trimmed scan's time origin. fMRIPrep is configured with `--dummy-scans 0`.
-- Consumers must **not trim BOLD or confounds again or shift canonical event onsets again**. Check the per-run TR, volume-discard sidecar, and equal BOLD/confound/design row counts.
-- Retention for fMRIPrep and exclusion from task models are separate decisions. The ses-11 `stopSignalWDirectedForgetting` run-1 is retained for preprocessing but excluded from task first-level models because of its timing failure. Retention does not certify suitability for every time-series method.
-- For s03/ses-01/goNogo/run-1, the canonical events contain **four go omissions**: `trial_id == test_trial`, `trial_type == go`, `key_press == -1`. LB confirmed this on 2026-09-25. The older saved matrix has not been located, so its discrepancy remains unexplained. Count trials, not nonzero samples in an HRF-convolved regressor.
-
-## Jeanette's analysis package
-
-[Jeanette's package](https://github.com/jmumford/network-fmri) builds designs and loads surface data. For the finalized canonical dataset, its existing `data_is_trimmed=True` path should consume the outputs without further trimming or onset shifts. Verify that path against the first completed fMRIPrep CIFTI and confounds before declaring compatibility. Its legacy untrimmed-data behavior still serves older datasets.
-
-Both Jeanette's package and the pipeline orchestrator use the Python name `network_fmri`. Install them in **separate uv environments**, and identify the repository and commit in analysis records.
-
-Each analysis should save its actual design matrix (a CSV/TSV named with `design_matrix`, `designMatrix`, or `design-matrix`), model specification, contrasts, package commit, input dataset commits, surface space/density, and confound choices. The dashboard can preview indexed saved matrices; it does not generate a second implementation of the model. Register new analysis outputs in the study and rebuild the records index to expose them.
-
-Before the full-sample release, verify surface/BOLD/confound alignment and TRs, publish the final scan manifest and canonical Oak location, and tag the DataLad dataset. Do not silently replace the legacy datasets collaborators currently use.
-
-## Code snapshot (2026-09-25)
-
-These are the checked local revisions used during the pilot; feature branches have not all been merged into `main`.
-
-| Repository | Branch | Commit |
-| --- | --- | --- |
-| lobennett/network_fmri | feat/mechababs-integration | 87515ad |
-| lobennett/network_fw2bids | feat/file-provenance | 1e86429 |
-| lobennett/network_events | feat/file-provenance | 9e6690d |
-| lobennett/network_qa | main | ccafd79 |
-| lobennett/network_glm | main | a61c8d4 |
-| jmumford/network-fmri (inspected) | — | c25cd9fa08f6137596fa031b681d652eea6b106b |
-
-The dashboard currently lives on the local `feat/dashboard` branch with no GitHub remote. The processing records describe software actually recorded for each transformation; this table identifies source checkouts, not proof that every historical output used them.
+**Do not trim again.** Seven volumes were removed upstream; canonical events already
+use that time origin. Check matching BOLD, confound and design row counts. Retain
+the model recipe, saved design, contrasts, software commit, space and smoothing
+settings with each analysis. The dashboard previews recorded events/designs; it
+does not fit models or replace their QA.

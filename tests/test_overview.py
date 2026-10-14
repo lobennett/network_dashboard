@@ -48,3 +48,33 @@ def test_completed_subject_overrides_dataset_campaign_placeholder(study):
         db.execute("INSERT INTO stage_attempts VALUES ('fmriprep-complete','sub-s03','success')")
     value=client(study).get('/api/overview').json()['subjects'][0]
     assert value['stages']['fmriprep']=='Complete'
+
+
+def test_ready_and_blocked_campaigns_are_not_submitted_jobs(study):
+    for state, expected in [('ready', 'Ready'), ('blocked', 'Blocked'), ('pending', 'Queued')]:
+        with sqlite3.connect(study[1]) as db:
+            db.execute("DELETE FROM stage_attempts")
+            db.execute("INSERT INTO stage_attempts VALUES ('fmriprep','dataset',?)", (state,))
+        value = client(study).get('/api/overview').json()['subjects'][0]
+        assert value['stages']['fmriprep'] == expected
+        assert value['status'] == expected
+        assert value['focus_stage'] == 'fmriprep'
+
+
+def test_outputs_recorded_does_not_invent_final_approval(study):
+    with sqlite3.connect(study[1]) as db:
+        db.execute('DELETE FROM stage_attempts')
+        db.execute('ALTER TABLE findings ADD COLUMN evidence_path TEXT')
+        db.execute('INSERT INTO metadata VALUES (?,?)', ('active_projects', json.dumps({'fmriprep': {'path':'derivatives/fprep','commit':'current'}})))
+        for stage in ['fmriprep-complete','fmriprepviz']:
+            db.execute('INSERT INTO stage_attempts VALUES (?,?,?)',(stage,'sub-s03','success'))
+        for kind in ['fmriprep-output-check','registration-output']:
+            db.execute('INSERT INTO findings VALUES (?,?,?,?)', ('scan',kind,json.dumps({'source_project':'derivatives/fprep','source_commit':'current'}),'derivatives/fprep+review/evidence.json'))
+        db.execute('INSERT INTO findings VALUES (?,?,?,?)',('scan','flywheel-acquisition','{}',None))
+    value=client(study).get('/api/overview').json()['subjects'][0]
+    assert value['status']=='Outputs recorded'
+    assert value['status_detail']=='Final output review unrecorded'
+    assert value['stages']['source']=='Inventory recorded'
+    with sqlite3.connect(study[1]) as db:
+        db.execute("UPDATE findings SET evidence_json=replace(evidence_json,'current','old')")
+    assert client(study).get('/api/overview').json()['subjects'][0]['status']=='Incomplete'

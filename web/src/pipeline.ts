@@ -65,10 +65,10 @@ export const stages = [
   },
   {
     id: "fmriprep",
-    title: "fMRIPrep 25.2.5",
+    title: "fMRIPrep",
     caption: "Reuse approved surfaces",
     description:
-      "Planned version: fMRIPrep 25.2.5. Preprocess retained scans using the approved FreeSurfer subjects directory, then inspect the final outputs.",
+      "The corrected rerun targets fMRIPrep 25.2.7-rc1 with rigid atlas initialization and --project-goodvoxels. Original 25.2.5 pilot results are labeled separately. Execution records identify the exact image and package versions.",
   },
   {
     id: "registration",

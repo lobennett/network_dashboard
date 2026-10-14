@@ -437,9 +437,6 @@ header {
 .history-source .history-files button { display: block; margin-top: 4px; }
 /* Stage history is a direct route; current inventory is a separate view. */
 .current-summary-label { font-size: 12px; color: var(--muted); margin: 12px 0 8px; }
-.stage-navigation { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0; border: 1px solid var(--rule); margin-top: 12px; }
-.stage-navigation button { border: 0; border-radius: 0; border-bottom: 1px solid var(--rule); display: flex; align-items: center; gap: 10px; padding: 11px 12px; font-size: 13px; text-align: left; background: white; min-width: 0; }
-.stage-navigation button[aria-current="step"] { color: white; background: var(--cardinal); }
 .stage-number { font-size: 12px; opacity: .7; flex: 0 0 15px; }
 .stage-parallel-note { font-size: 12px; color: var(--muted); margin: 8px 0 0; }
 .stage-report { border-top: 3px solid var(--cardinal); padding: 18px 0; margin-bottom: 12px; }
@@ -458,18 +455,19 @@ header {
 .stage-file-row button { text-align: left; overflow-wrap: anywhere; }.stage-file-row small { font-size: 11px; color: var(--muted); }
 .file-path { overflow-wrap: anywhere; font-size: 12px !important; }
 .evidence-card { margin: 8px 0; }.evidence-card p { font-size: 13px; }
-@media(max-width:650px) { .stage-navigation { grid-template-columns: repeat(2,minmax(0,1fr)); }.stage-io { grid-template-columns: 1fr; gap: 4px; }.stage-io dd { margin-bottom: 8px; } }
+@media(max-width:650px) { .stage-io { grid-template-columns: 1fr; gap: 4px; }.stage-io dd { margin-bottom: 8px; } }
 .stage-state { margin-left: auto; font-size: 10px; opacity: .75; }
-.review-controls { display: block; }
-.stage-navigation { width: 100%; }
 .stage-parallel-note { max-width: none; }
 
-/* Quiet navigation: one compact strip, with details revealed on demand. */
-.stage-navigation { display:flex; flex-wrap:wrap; border:0; gap:4px; margin:16px 0 0; }
-.stage-navigation button { padding:9px 12px; border:1px solid transparent; border-bottom:2px solid var(--rule); font-size:12px; }
-.stage-navigation button:hover { background:#f5f5f4; border-bottom-color:var(--cardinal); }
-.stage-navigation button[aria-current="step"] { background:#faf1f1; color:var(--cardinal); border-bottom-color:var(--cardinal); font-weight:700; }
-.stage-navigation button:last-child { margin-left:auto; border:1px solid var(--rule); border-radius:4px; }
+/* Two review modes; history picks one stage from a native select. */
+.review-controls { flex-wrap:wrap; justify-content:flex-start; gap:10px 20px; margin:16px 0 4px; }
+.review-modes { gap:0; border:1px solid var(--rule); border-radius:4px; overflow:hidden; }
+.review-modes button { border-radius:0; padding:8px 14px; }
+.review-modes button + button { border-left:1px solid var(--rule); }
+.review-modes button[aria-pressed="true"] { background:var(--cardinal); color:white; }
+.review-controls label { font-size:13px; }
+.review-controls select { min-width:min(100%,280px); }
+.review-mode-note { margin:0; font-size:13px; color:var(--muted); }
 .stage-report { border-top:0; padding:14px 0 12px; }
 .stage-overview > p { margin:6px 0 12px; }
 .stage-supporting { color:var(--muted); }
@@ -479,7 +477,11 @@ header {
 .stage-changes { margin:8px 0; }
 .stage-changes > h3 { margin-top:8px; }
 .stage-changes > p { margin:4px 0; }
-@media(max-width:650px) { .stage-navigation { flex-wrap:nowrap; overflow-x:auto; padding-bottom:4px; } .stage-navigation button { flex:0 0 auto; } .stage-navigation button:last-child { margin-left:8px; } }
+@media(max-width:650px) { .review-controls label { flex-wrap:wrap; } .review-controls select { width:100%; } }
+
+/* Give the viewer more of the workspace. */
+@media (min-width: 1151px) { .review-workspace:not(.subject-outputs) { grid-template-columns: minmax(250px, 310px) minmax(0, 1fr); } }
+@media (min-width: 651px) { .viewer-frame { height: clamp(380px, 62vh, 640px); } }
 
 .trim-reports {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:24px;padding:16px 0;border-bottom:1px solid var(--rule);}
 .trim-reports h3 {margin:0 0 12px;}.trim-reports button {margin-right:12px;margin-bottom:8px;}
@@ -495,3 +497,32 @@ header {
 #overview-page,#exclusions-page{max-width:1320px;margin:auto;padding:32px}.overview-filters{display:flex;flex-wrap:wrap;gap:12px;margin:20px 0}.overview-filters input{min-width:0;flex:1;max-width:420px}.overview-table{overflow:auto;max-width:100%;border-top:2px solid var(--cardinal)}.overview-table table{width:100%;border-collapse:collapse}.overview-table th,.overview-table td{padding:14px 12px;text-align:left;vertical-align:top;border-bottom:1px solid var(--rule);overflow-wrap:anywhere}.overview-table th{font-size:13px;color:var(--muted)}.overview-table details button{display:block;text-align:left;margin:6px 0}.overview-table summary{white-space:nowrap;cursor:pointer;color:var(--cardinal)}.snapshot-details{margin-top:24px}.stage-flow{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:24px;margin:16px 0}.stage-flow p{font-size:13px;line-height:1.5;margin:4px 0;color:var(--muted)}.stage-check-summary,.stage-receipts{display:flex;flex-wrap:wrap;gap:12px;align-items:center;font-size:13px;margin:12px 0}.stage-check-summary{border-top:1px solid var(--rule);padding-top:12px}.stage-receipts .text-button{padding:4px 0}.stage-receipts{overflow-wrap:anywhere}@media(max-width:700px){#overview-page,#exclusions-page{padding:16px}.overview-table table{min-width:620px}.stage-flow{gap:12px}.page-nav{flex-wrap:wrap}}
 
 #exclusions-page .overview-table{max-height:70vh}#exclusions-page .overview-table th{position:sticky;top:0;background:#fff;z-index:1}
+
+/* Study secondary tabs: Progress / Data completeness. */
+.study-tabs{display:flex;gap:24px;max-width:1320px;margin:0 auto;padding:20px 32px 0;border-bottom:1px solid var(--rule)}
+.study-tabs a{padding:8px 0;font-size:14px;color:var(--muted);text-decoration:none;border-bottom:2px solid transparent}
+.study-tabs a[aria-current="page"]{color:var(--cardinal);border-bottom-color:var(--cardinal);font-weight:600}
+
+/* Analysis exports: manifest download first, recorded decisions collapsed below. */
+.export-controls{display:flex;flex-wrap:wrap;align-items:flex-end;gap:14px 18px;margin:20px 0 28px;padding:18px 20px;border:1px solid var(--rule);border-top:3px solid var(--cardinal)}
+.export-controls h2{flex-basis:100%;margin:0;font-size:18px}
+.export-controls > p{flex-basis:100%;margin:0;font-size:14px;line-height:1.5;max-width:90ch}
+.export-controls label{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--muted)}
+.export-controls input,.export-controls select{min-width:180px}
+.export-actions{display:flex;flex-wrap:wrap;gap:8px}
+.export-status:empty{display:none}
+.recorded-decisions > summary{cursor:pointer;color:var(--cardinal);font-size:15px}
+.recorded-decisions[open] > summary{margin-bottom:8px}
+@media(max-width:700px){.study-tabs{padding:14px 16px 0}.export-controls{padding:14px}.export-controls label,.export-controls input,.export-controls select{width:100%;min-width:0}}
+
+#connector-warning { padding: 10px 24px; background: #fff4dc; border-bottom: 1px solid #e5d2a8; font-size: .9rem; }
+
+/* Keep the roster within the viewport without stretching the review canvas. */
+@media (min-width: 761px) {
+  .workspace > aside {
+    position: sticky; top: 0; align-self: start;
+    height: calc(100vh - 68px); display: flex; flex-direction: column;
+  }
+  .workspace > aside #subjects { overflow-y: auto; min-height: 0; flex: 1; }
+  .workspace > aside .aside-note { margin-top: 16px; }
+}

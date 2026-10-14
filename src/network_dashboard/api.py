@@ -12,10 +12,10 @@ from fastapi.staticfiles import StaticFiles
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 from starlette.middleware.cors import CORSMiddleware
 
-from network_dashboard.artifacts import content_path
+from network_dashboard.artifacts import content_path, allowed_path
 from network_dashboard.checksums import verifiable
 from network_dashboard.reports import is_subject_report
-from network_dashboard.records import connect, rows, dataset_roots
+from network_dashboard.records import connect, rows, dataset_roots, historical_only, published_location, published_availability
 from network_dashboard.stages import Stage, stage_record
 
 
@@ -29,7 +29,7 @@ def create_app(index: Path, study: Path, web: Path | None = None, *, allowed_ori
     app = FastAPI(title="Network pipeline", docs_url=None, redoc_url=None)
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=["localhost", "127.0.0.1", "[::1]", "testserver"])
     app.add_middleware(CORSMiddleware, allow_origins=allowed_origins, allow_methods=['GET'],
-                       allow_headers=['Range'], allow_credentials=True,
+                       allow_headers=['Range'], allow_credentials=False,
                        allow_private_network=bool(allowed_origins))
 
     @app.middleware("http")
@@ -54,7 +54,8 @@ def create_app(index: Path, study: Path, web: Path | None = None, *, allowed_ori
         except (KeyError, ValueError, TypeError):
             age = None
         return {**value, "age_seconds": age, "stale": age is None or age > 900,
-                "conversion_links": conversion_links}
+                "conversion_links": conversion_links,
+                "capabilities": ["analysis_exports", "historical_locations"]}
 
     @app.get('/api/overview')
     def overview():
@@ -69,6 +70,18 @@ def create_app(index: Path, study: Path, web: Path | None = None, *, allowed_ori
             value=exclusions(db)
         if format=='tsv':
             return Response(exclusions_tsv(value),media_type='text/tab-separated-values',headers={'Content-Disposition':'attachment; filename="network_exclusions.tsv"'})
+        return value
+
+    @app.get('/api/exports/{scope}')
+    def export_analysis(scope: Literal['preprocessing','task_first_level','timeseries'],
+                        subject: str | None = None, task: str | None = None,
+                        format: Literal['json','tsv'] = 'json'):
+        from network_dashboard.exports import analysis_manifest, analysis_tsv
+        with connect(index) as db:
+            value = analysis_manifest(db, scope, subject=subject, task=task)
+        if format == 'tsv':
+            return Response(analysis_tsv(value), media_type='text/tab-separated-values',
+                            headers={'Content-Disposition': f'attachment; filename="network_{scope}_scans.tsv"'})
         return value
 
     @app.get("/api/subjects")
@@ -165,8 +178,10 @@ def create_app(index: Path, study: Path, web: Path | None = None, *, allowed_ori
             if stage:
                 if not subject:
                     raise HTTPException(400, "Stage files require a subject")
-                allowed = {f['id'] for f in stage_record(db, study, subject, stage)['outputs']}
+                allowed = {f['id']: f for f in stage_record(db, study, subject, stage)['outputs']}
                 found = [item for item in found if item['id'] in allowed]
+                for item in found:
+                    item['stage_basis'] = allowed[item['id']].get('stage_basis')
             if dataset_stage:
                 roots = dataset_roots(db, study)
                 def matches_stage(item):
@@ -189,12 +204,20 @@ def create_app(index: Path, study: Path, web: Path | None = None, *, allowed_ori
             if preview:
                 for item in found:
                     try:
-                        content_path(db, study, item)
-                        item['preview_available'] = True
+                        path = allowed_path(db, study, item)
+                        historical = historical_only(db, item['id'])
+                        retained = published_location(db, item)
+                        available = published_availability(db, item['id'])
+                        item['availability'] = available or ('historical' if historical else 'unverified')
+                        item['preview_available'] = path.is_file() and (not historical or bool(retained))
+                        item['fetch_available'] = bool(fetcher and verifiable(item['content_id'])
+                                                       and available != 'unavailable' and (not historical or retained))
+                        if not item['preview_available'] and not item['fetch_available']:
+                            item['preview_reason'] = ('Historical bytes have not been published for this version.' if historical
+                                                      else 'This recorded file is unavailable in the published snapshot.')
                     except HTTPException as error:
                         item.update(preview_available=False, preview_reason=error.detail,
-                                    fetch_available=bool(fetcher and error.status_code in {404, 409}
-                                                         and verifiable(item['content_id'])))
+                                    fetch_available=False)
             return found
 
     def get_artifact(db, identity):
@@ -222,7 +245,7 @@ def create_app(index: Path, study: Path, web: Path | None = None, *, allowed_ori
         with connect(index) as db:
             artifact = get_artifact(db, identity)
             if not table_kind(artifact['path']):
-                raise HTTPException(400, 'This artifact is not an events or saved design table')
+                raise HTTPException(400, 'This artifact is not a raw behavior, events or saved design table')
             path = fetcher(identity) if fetcher else content_path(db, study, artifact)
             return {**read_table(path, name=artifact['path']), 'artifact': artifact}
 

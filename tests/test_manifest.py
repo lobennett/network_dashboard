@@ -31,7 +31,7 @@ def test_manifest_keeps_analysis_exclusion_separate_and_does_not_invent_approval
     assert scan['timeseries_analysis'] == 'no_decision_recorded'
     assert scan['volumes_removed'] == 7
     other = next(r for r in result['scans'] if r['session'] == '01')
-    assert other['preprocessing'] == 'unrecorded' and other['task_first_level'] == 'no_exclusion_recorded'
+    assert other['preprocessing'] == 'unrecorded' and other['task_first_level'] == 'unrecorded'
     assert other['volumes_removed'] is None
     assert result['datasets'][0]['commit_hash'] == 'def456'
     text = scan_tsv(result)

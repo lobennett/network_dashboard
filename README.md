@@ -3,28 +3,25 @@
 Read-only review of Network scans, decisions, and file provenance. Oak/DataLad
 holds the canonical data; the dashboard uses a disposable local cache.
 
-With uv, SSH, and a Sherlock account with russpold Oak access:
+With uv, SSH, and a Sherlock account with russpold Oak access, use the
+[connection page](https://network-dashboard-devloganbennetts-projects.vercel.app/connect.html)
+to enter your SUNet ID and copy a personalized command. Alternatively:
 
 ```bash
-uvx --python 3.12 --from https://network-dashboard-devloganbennetts-projects.vercel.app/downloads/network_dashboard-0.8.2-py3-none-any.whl network-dashboard connect --ssh YOUR_SUNET_ID@login.sherlock.stanford.edu --study /oak/stanford/groups/russpold/data/network_grant/bids --index /oak/stanford/groups/russpold/data/network_grant/network-dashboard-v1/records.sqlite
+uvx --python 3.12 --from https://network-dashboard-devloganbennetts-projects.vercel.app/downloads/network_dashboard-0.9.0-py3-none-any.whl network-dashboard connect --ssh YOUR_SUNET_ID@login.sherlock.stanford.edu --study /oak/stanford/groups/russpold/data/network_grant/bids --index /oak/stanford/groups/russpold/data/network_grant/network-dashboard-v1/records.sqlite
 ```
 
 Complete authentication, leave the command running, and open the
 [dashboard](https://network-dashboard-devloganbennetts-projects.vercel.app).
-Images and reports download when opened; restart the command to refresh records.
+The command shows download progress and an estimated remaining time. Unchanged
+snapshots and verified files reuse the cache. Images and reports download when
+opened; restart the command to check for updated records.
 No local DataLad installation is needed. See [setup](web/public/connect.html).
 
-**Study progress** shows every configured subject and recorded stage, with missing
-subjects marked “Not indexed.” It is a snapshot, not live Slurm status. **Exclusions**
-separates Flywheel skips, preprocessing drops and task-model exclusions; download
-the TSV for analysis handoff.
-
-**Review data** shows exact stage evidence and current supporting receipts separately.
-The events stage checks current behavior, event files and timing findings; B0 linkage
-checks each echo’s sidecar against its session fieldmap on request. Trim volumes
-shows pre/post reports and verified counts. Use **Current files** for the latest
-inventory, **Data completeness** for missing files, and the **Pipeline guide** for
-stage order. Images download when opened; restart the connector to refresh records.
+**Study** shows progress and data completeness. **Review data** opens current files;
+**Processing history** selects a stage's recorded versions. Metrics, decisions and
+file history stay beside the viewer. **Analysis exports** downloads scope-specific
+scan manifests with exclusions, input identities and dataset commits.
 
 For an existing local DataLad clone, use `network-dashboard --study PATH --index PATH`.
 See [sharing](docs/sharing.md) for deployment and [analysis handoff](docs/analysis-handoff.md)
@@ -51,3 +48,9 @@ Keep study data, indexes, credentials, and licenses out of Git and deployments.
 FSQC metrics and anatomical/surface PNGs appear in the FreeSurfer stage after
 the pipeline publishes its `fsqc-2.1.4` derivative. These support manual review;
 metric outliers do not approve or exclude a subject.
+
+Raw behavior is registered under `sourcedata/behavioral` before events are generated.
+In **Review data → Events & metadata → Events & design**, choose a raw CSV or an
+events table to inspect or download it. Raw CSV previews retain the original units.
+The connector owns its SSH connection until you stop it; server-side disconnects
+still require reconnecting and completing Duo.

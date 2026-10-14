@@ -23,7 +23,7 @@ it("fetches reports through CORS and preserves the opaque report sandbox", async
   await openRecordedFile("report", "scan_bold.html");
   expect(fetch).toHaveBeenCalledWith(
     "http://127.0.0.1:18782/api/artifacts/report/content",
-    expect.objectContaining({ credentials: "include" }),
+    expect.objectContaining({ credentials: "omit" }),
   );
   const frame = document.querySelector("iframe")!;
   expect(frame.getAttribute("sandbox")).toBe("allow-scripts");
@@ -74,4 +74,11 @@ it('counts actual BIDS-validator issues and links affected scans',async()=>{
  expect(document.querySelector('.receipt-summary')?.textContent).toContain('1 warning');
  const link=document.querySelector<HTMLAnchorElement>('.receipt-summary a')!;
  expect(link?.getAttribute('href')).toContain('focus=');expect(link?.getAttribute('href')).toContain('sub-s03');
+});
+it('shows canonical raw behavior as a table with original units',async()=>{
+ Object.defineProperty(HTMLDialogElement.prototype,'showModal',{value:vi.fn(),configurable:true});
+ vi.stubGlobal('fetch',vi.fn().mockResolvedValue({ok:true,json:async()=>({kind:'behavior',columns:['rt'],rows:[{rt:'421'}],total_rows:1,total_columns:1,truncated:false})}));
+ await openRecordedFile('raw','sub-s03_task-flanker_beh.csv');
+ expect(document.querySelector('td')?.textContent).toBe('421');
+ expect(document.body.textContent).toContain('original units');
 });

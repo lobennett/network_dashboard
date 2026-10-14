@@ -1,55 +1,44 @@
 # Sharing
 
-[Vercel](https://network-dashboard-devloganbennetts-projects.vercel.app) hosts the
-interface and code-only Python wheel. Collaborators run the [setup command](../web/public/connect.html)
-with uv and SSH; no Git, git-annex, or DataLad installation is required locally.
-The service binds to localhost and permits only the configured HTTPS frontend.
+[Vercel](https://network-dashboard-devloganbennetts-projects.vercel.app) serves the
+interface and Python connector wheel. Study data stay on Oak. Collaborators need
+uv, SSH and a Sherlock account with russpold Oak access; local DataLad is unnecessary.
+The [connection page](https://network-dashboard-devloganbennetts-projects.vercel.app/connect.html)
+generates their copyable command.
 
-`network-dashboard connect --ssh USER@HOST` uses the pilot at
-`/oak/stanford/groups/russpold/data/network_grant/bids` and index at
-`/oak/stanford/groups/russpold/data/network_grant/network-dashboard-v1/records.sqlite`.
-Override these with `--study` and `--index`. Each SSH/study/index combination gets its own cache; matching legacy caches are reused.
-`--cache` selects an explicit directory, which must match that connection.
-Restart to refresh the snapshot. Missing files are fetched on click and checked
-against indexed SHA256 or legacy git-annex MD5 checksums. A first MRIQC report may download its result ZIP.
+The connector authenticates with SSH/Duo, downloads the published records snapshot
+and privacy receipts, then serves a read-only API on localhost. Images and reports
+are fetched when opened and checked against their recorded checksums. Its attended
+SSH connection closes when the terminal command stops. Restart the command to refresh
+the records; reload the browser for a website update. These are separate operations.
+An occupied port is reported before authentication or downloading.
 
-DataLad provenance stays on Sherlock. Original DICOMs/P-files stay on Flywheel;
-the index records their identities and conversion receipts. FreeSurfer **8.2.0**
-precedes fMRIPrep **25.2.5**; the older anatomical campaign is marked legacy.
+Defaults:
 
-## Publish records
+- Study: `/oak/stanford/groups/russpold/data/network_grant/bids`
+- Index: `/oak/stanford/groups/russpold/data/network_grant/network-dashboard-v1/records.sqlite`
+- Cache: `~/.cache/network-dashboard/` (isolated by connection and study)
 
-Rebuild from the current study, then copy the SQLite file to the shared index path:
+Override with `--study`, `--index` or `--cache`. Current files and exact historical
+versions remain distinct; an unavailable version never silently loads a newer image.
+Original DICOMs/P-files remain on Flywheel. Archived full fMRIPrep outputs are identified
+in analysis exports; review images and reports are separately published for browsing.
 
-```bash
-network-fmri records build workflow.toml --output /path/to/records.sqlite
-```
+## Publication
 
-The Oak sibling must contain the registered file versions referenced by that
-index. The index is a snapshot, not a live scheduler feed.
+Use the pipeline's `study publish` command with its workflow configuration and
+`--index` destination. It verifies the Oak revision, publishes content, audits
+availability, and atomically replaces the index. Group read/traversal access must
+include the index, dataset directories and annex objects. Do not make data public.
+The snapshot timestamp is not a live scheduler feed.
 
-The index builder creates an owner-only file. When publishing, explicitly grant
-read access to the authorized Oak group; copying that file can preserve its
-private permissions. For this study, collaborators belong to `oak_russpold`:
+## Website release
 
-```bash
-SHARED_INDEX=/oak/stanford/groups/russpold/data/network_grant/network-dashboard-v1/records.sqlite
-install -m 0640 -g oak_russpold /path/to/records.sqlite "$SHARED_INDEX.pending"
-mv "$SHARED_INDEX.pending" "$SHARED_INDEX"
-```
+Build/test Python and the frontend, then deploy only `web/dist` with the connector
+wheel in `downloads/`. Keep old wheels available for previously shared commands.
+Publish the wheel's SHA256 with the connection command. Never include study data,
+SQLite indexes, credentials or licenses in Git or Vercel.
 
-Parent directories also need group traversal access. Check the study files and
-git-annex content for group read access too. Do not make the data world-readable.
-
-## Deploy
-
-```bash
-uv build --wheel
-mkdir -p web/public/downloads
-cp dist/network_dashboard-0.8.2-py3-none-any.whl web/public/downloads/
-vercel --prod
-```
-
-Inspect the wheel before publishing. `.vercelignore` allowlists frontend code,
-setup instructions, and this wheel. Never upload study data, indexes, credentials,
-or licenses. Access to the website alone does not grant Oak access.
+The prebuilt deployment must retain the no-store entry-page headers and security
+headers from `vercel.json`. Verify the deployed SUNet form and a real local connector
+before sharing the URL.

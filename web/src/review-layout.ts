@@ -36,16 +36,23 @@ export function subjectSummary(data: Subject): HTMLElement {
   }
   return panel;
 }
-export function reviewControls(active:Stage,select:(stage:Stage)=>void,data?:Subject):HTMLElement {
+// Two review modes: latest files, or one stage's recorded history chosen from a compact list.
+export function reviewControls(active:Stage,select:(stage:Stage)=>void,data?:Subject,historyStage:Stage='source'):HTMLElement {
   const panel=element('div','','review-controls');
-  const steps=element('nav','','stage-navigation');steps.setAttribute('aria-label','Processing steps and current files');
-  for(const stage of [...stages,{id:'current' as const,title:'Current files'}]){
-    const button=element('button');button.append(element('span',stage.title));
-    button.setAttribute('aria-current',active===stage.id?'step':'false');
-    button.title=stage.id==='current'?'Latest available files':data?.reference_stages?.[stage.id]?.label??(data?stageStatus(stage.id,data.attempts):stage.title);
-    button.onclick=()=>select(stage.id);steps.append(button);
+  const history=active!=='current';
+  const modes=element('div','','review-modes');modes.setAttribute('role','group');modes.setAttribute('aria-label','Review mode');
+  for(const [label,stage,pressed] of [['Current files','current',!history],['Processing history',history?active:historyStage==='current'?'source':historyStage,history]] as [string,Stage,boolean][]){
+    const button=element('button',label);button.type='button';button.setAttribute('aria-pressed',String(pressed));
+    button.onclick=()=>{if(!pressed)select(stage);};modes.append(button);
   }
-  panel.append(steps);
-  requestAnimationFrame(()=>{const selected=steps.querySelector<HTMLElement>('[aria-current="step"]');if(selected&&steps.scrollWidth>steps.clientWidth)steps.scrollLeft=Math.max(0,selected.offsetLeft-steps.offsetLeft-16);});
+  panel.append(modes);
+  if(!history){panel.append(element('p','Latest files across all stages — not evidence of what any single stage produced.','review-mode-note'));return panel;}
+  const label=element('label','Stage'),picker=element('select');
+  for(const stage of stages){
+    const status=data?.reference_stages?.[stage.id]?.label??(data?(stage.id==='source'&&data.findings.some(f=>f.finding_type==='flywheel-acquisition')&&stageStatus('source',data.attempts)==='Unrecorded'?'Inventory recorded':stageStatus(stage.id,data.attempts)):'');
+    const option=element('option',status?`${stage.title} — ${status}`:stage.title);option.value=stage.id;picker.append(option);
+  }
+  picker.value=active;picker.onchange=()=>select(picker.value as Stage);
+  label.append(picker);panel.append(label);
   return panel;
 }

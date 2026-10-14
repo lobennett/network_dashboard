@@ -21,6 +21,7 @@ def subject_manifest(db, subject):
         by_scope = {d['scope']: d for d in decisions if d['entity_key'] == key}
         preprocessing = by_scope.get('preprocessing', {})
         task = by_scope.get('task_first_level', {})
+        dropped = preprocessing.get('decision') in {'drop', 'exclude', 'reject'}
         original, current = review.get('original_tr_count'), review.get('tr_count')
         try:
             removed = int(original) - int(current)
@@ -33,9 +34,9 @@ def subject_manifest(db, subject):
                       'review_approved': review.get('approved', 'unrecorded'),
                       'reviewer': preprocessing.get('reviewer'),
                       'flags': review.get('flags'),
-                      'task_first_level': task.get('decision', 'not_applicable' if entity['task'] == 'rest' else 'no_exclusion_recorded'),
-                      'task_first_level_reason': task.get('reason'),
-                      'timeseries_analysis': by_scope.get('timeseries', {}).get('decision', 'no_decision_recorded'),
+                      'task_first_level': 'excluded_preprocessing' if dropped else task.get('decision', 'not_applicable' if entity['task'] == 'rest' else 'unrecorded'),
+                      'task_first_level_reason': preprocessing.get('reason') if dropped else task.get('reason'),
+                      'timeseries_analysis': 'excluded_preprocessing' if dropped else by_scope.get('timeseries', {}).get('decision', 'no_decision_recorded'),
                       'original_tr_count': original, 'tr_count': current,
                       'volumes_removed': removed, 'event_status': review.get('event_status', 'unrecorded'),
                       'behavioral_status': review.get('behavioral_status', 'unrecorded'),

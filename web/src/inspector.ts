@@ -17,6 +17,8 @@ type Artifact = {
   preview_available?: boolean;
   fetch_available?: boolean;
   preview_reason?: string;
+  stage_basis?: string;
+  availability?: string;
 };
 type Lineage = {
   artifact: Artifact;
@@ -31,7 +33,11 @@ const isImage = (path: string) =>
 export class ScanInspector {
   private generation = 0;
   private viewer: Awaited<ReturnType<typeof viewFile>> | undefined;
-  constructor(private panel: HTMLElement) {}
+  // openCurrent switches the whole review (stage navigation and URL) to Current files for a scan.
+  constructor(
+    private panel: HTMLElement,
+    private openCurrent?: (scan: RecordRow) => void,
+  ) {}
   clear() {
     this.generation++;
     this.viewer?.cleanup();
@@ -139,7 +145,7 @@ export class ScanInspector {
       outcome.append(
         element(
           "p",
-          `Flagged during scan review: ${humanize(m.flags)}. ${m.approval_required === "yes" ? (m.approved === "yes" ? "Review approved." : "Review required.") : "No manual approval required."}`,
+          `Flagged during scan review: ${humanize(m.flags)}. ${m.approval_required === "yes" ? (m.approved === "yes" ? "Review approved." : "Review required.") : m.approval_required === "no" ? "No manual approval required." : "Approval requirement unrecorded."}`,
           m.approved === "yes" ? "reviewed-note" : "gap",
         ),
       );
@@ -280,8 +286,9 @@ export class ScanInspector {
             const name = file.path.split("/").pop()!;
             const option = element(
               "option",
-              `${name} · ${file.content_id?.slice(-6) ?? "unrecorded"}`,
+              `${name}${file.stage_basis === 'recorded_transformation' ? ' · Exact stage output' : file.stage_basis === 'current_stage_dataset' ? ' · Current derivative' : ''}`,
             );
+            option.title = file.path;
             option.value = String(index);
             picker.append(option);
           });
@@ -312,7 +319,17 @@ export class ScanInspector {
             );
           choices.append(picker, open, trace);
         }
-        if (!unique.length)
+        const historicalOnly = !unique.length && files.length > 0 && files.every(
+          file => file.availability === "historical" || file.preview_reason?.startsWith("Historical"));
+        if (historicalOnly) {
+          display.append(element("p", "Original stage images are recorded, but their historical bytes are not available in this published snapshot. Current files hold later versions, not this stage's outputs.", "empty"));
+          if (this.openCurrent) {
+            const openCurrent = this.openCurrent;
+            const current = element("button", "View current scan files", "primary");
+            current.onclick = () => openCurrent(scan);
+            display.append(current);
+          }
+        } else if (!unique.length)
           display.append(
             element(
               "p",
@@ -343,13 +360,14 @@ export class ScanInspector {
               `${unavailable.length} unavailable or historical file versions`,
             ),
           );
-          for (const file of unavailable)
-            block.append(
-              element(
-                "p",
-                `${file.path.split("/").pop()}: ${file.preview_reason}`,
-              ),
+          for (const file of unavailable) {
+            const row = element(
+              "p",
+              `${file.path.split("/").pop()}: ${file.preview_reason}`,
             );
+            row.title = file.path;
+            block.append(row);
+          }
           content.append(block);
         }
       } catch (error) {
@@ -372,7 +390,8 @@ export class ScanInspector {
         for (const file of all.filter(
           (f) => belongsToSelection(f) && !f.path.endsWith(".svg"),
         )) {
-          const button = element("button", file.path, "file-button");
+          const button = element("button", file.path.split("/").pop(), "file-button");
+          button.title = file.path;
           button.onclick = () =>
             void this.lineage(file.id, display, generation);
           list.append(button);
@@ -434,7 +453,8 @@ export class ScanInspector {
   showArtifact(file:StageFile,stage:Stage,trace=false){
     this.clear();
     const display=element('div','','preview-display');
-    this.panel.replaceChildren(element('h2',file.path.split('/').pop()),element('p',`File recorded for ${humanize(stage)}. Content is verified before display.`,'muted'),display);
+    const title=element('h2',file.path.split('/').pop());title.title=file.path;
+    this.panel.replaceChildren(title,element('p',`File recorded for ${humanize(stage)}. Content is verified before display.`,'muted'),display);
     if(trace)void this.lineage(file.id,display,this.generation);
     else if(isImage(file.path))void this.preview(file,display,this.generation);
     else if(file.path.endsWith('.html'))void openRecordedFile(file.id,file.path);
@@ -455,7 +475,7 @@ export class ScanInspector {
       canvas = element("canvas", "", "viewer");
     canvas.setAttribute("aria-label", "NiiVue image and surface viewer");
     frame.append(canvas);
-    const status = element("p", "Loading NiiVue…", "muted");
+    const status = element("p", "Fetching and verifying the selected files… Large images can take a few minutes.", "muted");
     display.replaceChildren(status, frame);
     try {
       const viewer = await viewFile(canvas, file.id, file.path, overlays, preset?.mode);
@@ -534,7 +554,7 @@ export class ScanInspector {
         display.append(
           element(
             "p",
-            "Earlier file-level history is unrecorded for this version.",
+            "File-level ancestry was not recorded for this file. This does not prevent opening it; use Open recorded file above.",
             "gap",
           ),
         );

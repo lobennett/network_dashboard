@@ -70,3 +70,13 @@ def test_omissions_are_unknown_without_response_expectation(tmp_path):
     path=tmp_path/'sub-s03_task-flanker_events.tsv'
     path.write_text('onset\tduration\ttrial_id\ttrial_type\tkey_press\n0\t1\ttest_trial\tcongruent\t-1\n')
     assert read_table(path)['behavior']['omissions'] is None
+
+
+def test_canonical_raw_behavior_is_previewed_without_reinterpreting_timing(tmp_path):
+    path=tmp_path/'sub-s03_task-flanker_beh.csv'
+    path.write_text('trial_id,rt,stimulus\ntest_trial,421,left\n')
+    result=read_table(path)
+    assert result['kind']=='behavior'
+    assert result['rows'][0]['rt']=='421'
+    assert result['behavior'] is None
+    assert result['nonmonotonic_pairs'] is None

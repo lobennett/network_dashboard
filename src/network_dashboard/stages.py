@@ -41,6 +41,8 @@ def stage_record(db, study, subject, stage):
     ids = {p['id'] for p in processing}
     links = [l for l in rows(db, 'SELECT * FROM lineage_links') if l['attempt'] in ids]
     roots = dataset_roots(db, study)
+    reference_datasets = {identity for identity, root in roots.items() if root.is_relative_to(study / 'references')}
+    root_paths = {identity: str(root.relative_to(study)) for identity, root in roots.items()}
     pattern = re.compile(r'(?:^|[/_])sub-' + re.escape(subject) + r'(?:[/_.]|$)')
     files = rows(db, 'SELECT * FROM artifact_versions')
     subject_ids = {f['id'] for f in files if pattern.search(f['path'])}
@@ -56,9 +58,9 @@ def stage_record(db, study, subject, stage):
     reference = json.loads(metadata.get('reference_stages', '{}')).get(subject, {}).get(stage)
     # Prefer actual current-campaign outputs whenever they exist for this subject.
     current_present = any(pattern.search(f['path']) and roots.get(f['dataset_id']) and
-                          (str(roots[f['dataset_id']].relative_to(study)) in {active_path, str(active_path) + '+review'}
+                          (root_paths[f['dataset_id']] in {active_path, str(active_path) + '+review'}
                            if active_path else stage == 'registration' and roots[f['dataset_id']].name.startswith('fmriprepviz-')
-                           and not roots[f['dataset_id']].is_relative_to(study / 'references'))
+                           and f['dataset_id'] not in reference_datasets)
                           for f in files)
     if current_present:
         reference = None
@@ -82,7 +84,7 @@ def stage_record(db, study, subject, stage):
     seen = {f['id'] for f in output_files}
     for file in files:
         root = roots.get(file['dataset_id'])
-        if root and root.is_relative_to(study / 'references') and stage not in ('fmriprep', 'registration'):
+        if file['dataset_id'] in reference_datasets and stage not in ('fmriprep', 'registration'):
             continue
         if stage == 'trim' and root and file['id'] in current_ids and global_signal_label(root, file['path']):
             if file['id'] not in seen:
@@ -94,7 +96,7 @@ def stage_record(db, study, subject, stage):
         expected = active_path
         if stage == 'surfaces' and root.name.startswith('fsqc-') and active_path:
             expected = re.sub(r'FreeSurfer-8\.[^+]+', 'fsqc-2.1.4', active_path)
-        if expected and str(root.relative_to(study)) not in {expected, expected + '+review'}:
+        if expected and root_paths[file['dataset_id']] not in {expected, expected + '+review'}:
             continue
         if file['id'] not in seen:
             output_files.append({**file, 'stage_basis': 'current_stage_dataset'})
@@ -111,7 +113,7 @@ def stage_record(db, study, subject, stage):
     if reference:
         decisions = reference.get('decisions', [])
     milestones = [a for a in rows(db, "SELECT * FROM stage_attempts WHERE scope IN (?, 'dataset') OR scope LIKE ?", (f'sub-{subject}', f'sub-{subject}/%')) if a['stage'] in PRODUCERS[stage]]
-    supporting_files = stage_supporting_files([f for f in files if not (roots.get(f['dataset_id']) and roots[f['dataset_id']].is_relative_to(study / 'references'))], current_ids, roots, study, subject, stage)
+    supporting_files = stage_supporting_files([f for f in files if f['dataset_id'] not in reference_datasets], current_ids, roots, study, subject, stage)
     return {'stage': stage, 'subject': subject, 'processing': processing,
             'supporting_files': supporting_files,
             'inputs': input_files, 'outputs': output_files, 'findings': findings,
@@ -155,6 +157,8 @@ def stage_supporting_files(files, current_ids, roots, study, subject, stage):
             belongs=True;purpose='BIDS validator report'
         if stage=='review' and name in {'scan_decisions.tsv','analysis_exclusions.tsv'}:
             belongs=True;purpose='Scan decisions' if name=='scan_decisions.tsv' else 'Analysis exclusions'
+        if stage=='fmriprep' and file['path'] in {'code/network_fmri/fmriprep-build.json','code/network_fmri/fmriprep-correction.json'}:
+            belongs=True;purpose='fMRIPrep build provenance' if name=='fmriprep-build.json' else 'fMRIPrep correction status'
         if stage=='surfaces' and root.name.startswith('fsqc-') and name in {'fsqc-results.csv','surface-qc.json'}:
             belongs=True;purpose='FSQC metrics' if name.endswith('.csv') else 'FSQC provenance'
         if stage=='surfaces' and name=='surface_review.tsv':

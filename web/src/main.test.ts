@@ -23,10 +23,53 @@ it("waits for a connection click before accessing the local network", async () =
   await import("./main");
   expect(get).not.toHaveBeenCalled();
   document.querySelector<HTMLButtonElement>(".connection button")!.click();
-  await vi.waitFor(() => expect(document.querySelector(".stage-navigation button")).not.toBeNull());
-  Array.from(document.querySelectorAll<HTMLButtonElement>(".stage-navigation button")).find(b=>b.textContent==="Current files")!.click();
+  await vi.waitFor(() => expect(document.querySelector(".review-modes button")).not.toBeNull());
   await vi.waitFor(() => expect(document.querySelector(".scan-name")).not.toBeNull());
   expect(document.querySelector(".connection")).toBeNull();
+});
+it("opens Current files by default and keeps explicit stage deep links", async () => {
+  responses(() => Promise.resolve({}));
+  await import("./main");
+  await vi.waitFor(() => expect(document.querySelector('.review-modes [aria-pressed="true"]')?.textContent).toBe("Current files"));
+  expect(new URL(location.href).searchParams.get("stage")).toBe("current");
+  Array.from(document.querySelectorAll<HTMLButtonElement>(".review-modes button")).find(b=>b.textContent==="Processing history")!.click();
+  const picker = document.querySelector<HTMLSelectElement>(".review-controls select")!;
+  expect(picker.options).toHaveLength(10);
+  picker.value = "mriqc"; picker.dispatchEvent(new Event("change"));
+  expect(new URL(location.href).searchParams.get("stage")).toBe("mriqc");
+  expect(document.querySelector<HTMLSelectElement>(".review-controls select")?.value).toBe("mriqc");
+});
+it("switches the whole review to Current files from a historical-only stage", async () => {
+  history.replaceState(null, "", "/?stage=bids&subject=s03&scan=scan");
+  responses((path) => Promise.reject(new Error(path)));
+  const original = vi.mocked(get).getMockImplementation()!;
+  vi.mocked(get).mockImplementation((path: string) =>
+    path.includes("/stages/")
+      ? Promise.resolve({ stage: "bids", subject: "s03", snapshot_kind: "recorded_stage_evidence", inputs: [], outputs: [], processing: [], findings: [{ entity_key: "scan", finding_type: "conversion", evidence_json: "{}" }], decisions: [], milestones: [] }) as never
+      : path.startsWith("artifacts?") && path.includes("stage=bids")
+      ? Promise.resolve([{ id: "old", path: "a_bold.nii.gz", dataset_id: "raw", content_id: "old", availability: "historical", preview_reason: "Historical bytes have not been published for this version." }]) as never
+      : original(path));
+  await import("./main");
+  const shortcut = () => Array.from(document.querySelectorAll<HTMLButtonElement>("#inspector button")).find(b => b.textContent === "View current scan files");
+  await vi.waitFor(() => expect(shortcut()).toBeDefined());
+  shortcut()!.click();
+  const url = new URL(location.href);
+  expect(url.searchParams.get("stage")).toBe("current");
+  expect(url.searchParams.get("scan")).toBe("scan");
+  expect(document.querySelector('.review-modes [aria-pressed="true"]')?.textContent).toBe("Current files");
+});
+it("keeps Data completeness under Study and labels the export page", async () => {
+  vi.stubEnv("VITE_API_BASE_URL", "http://127.0.0.1:18782");
+  await import("./main");
+  const labels = Array.from(document.querySelectorAll(".page-nav a")).map(a => a.textContent);
+  expect(labels).toEqual(["Study", "Review data", "Analysis exports", "Guide"]);
+  location.hash = "coverage"; window.dispatchEvent(new Event("hashchange"));
+  expect(document.getElementById("study-tabs")!.hidden).toBe(false);
+  expect(document.querySelector('.page-nav a[aria-current="page"]')?.textContent).toBe("Study");
+  expect(document.querySelector('.study-tabs a[aria-current="page"]')?.textContent).toBe("Data completeness");
+  location.hash = "exclusions"; window.dispatchEvent(new Event("hashchange"));
+  expect(document.getElementById("study-tabs")!.hidden).toBe(true);
+  expect(document.title).toContain("Analysis exports");
 });
 function responses(lineage: (path: string) => Promise<unknown>) {
   vi.mocked(get).mockImplementation((path: string) => {
@@ -79,10 +122,8 @@ it("an obsolete lineage error cannot replace the newer selected file", async () 
         }),
   );
   await import("./main");
-  await vi.waitFor(() => expect(document.querySelector(".stage-navigation button")).not.toBeNull());
-  Array.from(document.querySelectorAll<HTMLButtonElement>(".stage-navigation button")).find(b=>b.textContent==="Current files")!.click();
+  await vi.waitFor(() => expect(document.querySelector(".review-modes button")).not.toBeNull());
   await vi.waitFor(() => expect(document.querySelector(".scan-name")).not.toBeNull());
-  Array.from(document.querySelectorAll<HTMLButtonElement>(".stage-navigation button")).find(b=>b.textContent==="Current files")!.click();
   document.querySelector<HTMLButtonElement>(".scan-name")!.click();
   document.querySelector<HTMLButtonElement>(".inspector-tabs button")!.click();
   await vi.waitFor(() =>
@@ -125,7 +166,7 @@ it("an open page marks an aging index as not live", async () => {
   );
 });
 
-it("offers the pipeline guide before connecting and returns to review", async () => {
+it("offers the pipeline guide before connecting and hides empty review", async () => {
   vi.stubEnv("VITE_API_BASE_URL", "http://127.0.0.1:18782");
   await import("./main");
   location.hash = "pipeline";
@@ -135,10 +176,13 @@ it("offers the pipeline guide before connecting and returns to review", async ()
   expect(get).not.toHaveBeenCalled();
   location.hash = "review";
   window.dispatchEvent(new Event("hashchange"));
-  expect(document.getElementById("review-page")!.hidden).toBe(false);
+  expect(document.getElementById("review-page")!.hidden).toBe(true);
+  expect(document.getElementById("overview-page")!.hidden).toBe(false);
+  expect(document.getElementById("review-nav")!.hidden).toBe(true);
 });
 
 it('clears old source buttons before a new subject finishes loading',async()=>{
+ history.replaceState(null,'','/?stage=source');
  vi.mocked(get).mockImplementation(async(path:string)=>{
   if(path==='metadata')return {built_at:new Date().toISOString(),stale:false};
   if(path==='subjects')return [{subject:'s03'},{subject:'s04'}];
@@ -179,4 +223,27 @@ it('opens the affected scan from a validator issue link despite an old scan sele
  });
  await import('./main');
  await vi.waitFor(()=>expect(new URL(location.href).searchParams.get('scan')).toBe('rest'));
+});
+
+it('keeps the review page visible when its skip link is used',async()=>{
+ history.replaceState(null,'','/#review');responses(()=>Promise.resolve({}));
+ await import('./main');await vi.waitFor(()=>expect(document.querySelector('#review-page')?.hasAttribute('hidden')).toBe(false));
+ location.hash='review-page';window.dispatchEvent(new Event('hashchange'));
+ expect(document.querySelector('#review-page')?.hasAttribute('hidden')).toBe(false);
+});
+it('loads the overview once after connecting',async()=>{
+ history.replaceState(null,'','/#overview');responses(()=>Promise.resolve({snapshot:{},expected_subjects:1,indexed_subjects:1,note:'Snapshot',datasets:[],subjects:[]}));
+ await import('./main');await vi.waitFor(()=>expect(document.querySelector('#subject-title')?.textContent).toBe('sub-s03'));
+ await vi.waitFor(()=>expect(vi.mocked(get).mock.calls.filter(([path])=>path==='overview')).toHaveLength(1));
+});
+it('does not flash overview while navigating to a subject review',async()=>{
+ history.replaceState(null,'','/#overview');responses(()=>Promise.resolve({snapshot:{},expected_subjects:1,indexed_subjects:1,note:'Snapshot',datasets:[],subjects:[]}));
+ await import('./main');await vi.waitFor(()=>expect(document.querySelector('#subject-title')?.textContent).toBe('sub-s03'));
+ const original=vi.mocked(get).getMockImplementation()!;const value=await original('subjects/s03');
+ let release!:(value:unknown)=>void;const pending=new Promise(resolve=>{release=resolve;});
+ vi.mocked(get).mockImplementation(path=>path==='subjects/s03'?pending as never:original(path));
+ location.hash='review';document.querySelector<HTMLButtonElement>('#subjects button')!.click();window.dispatchEvent(new Event('hashchange'));
+ expect(document.querySelector('#review-page')?.hasAttribute('hidden')).toBe(false);
+ expect(document.querySelector('#overview-page')?.hasAttribute('hidden')).toBe(true);
+ release(value);await vi.waitFor(()=>expect(document.querySelector('.review-modes button')).not.toBeNull());
 });

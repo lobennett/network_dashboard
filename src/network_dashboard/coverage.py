@@ -2,6 +2,7 @@
 
 import json
 import re
+from bisect import bisect_left
 from pathlib import PurePosixPath
 from .records import rows
 
@@ -154,6 +155,10 @@ def study_coverage(db, subject=None):
         if f["finding_type"] == "behavior-truncation"
     }
     decisions = rows(db, "SELECT * FROM decisions")
+    files_by_name = {}
+    for file in files:
+        files_by_name.setdefault(PurePosixPath(file["path"]).name, []).append(file)
+    names = sorted(files_by_name)
     output = []
     for ident, scan in sorted(targets.items()):
         scan["echo"] = None
@@ -205,11 +210,10 @@ def study_coverage(db, subject=None):
         ]
         behavior = review.get("behavioral_status", "unrecorded")
         not_task = scan["suffix"] != "bold" or scan.get("task") == "rest"
-        candidates = [
-            f
-            for f in files
-            if PurePosixPath(f["path"]).name.startswith(base.split("/")[-1] + "_")
-        ]
+        stem = base.split("/")[-1] + "_"
+        first = bisect_left(names, stem)
+        last = bisect_left(names, stem + "\U0010ffff")
+        candidates = [file for name in names[first:last] for file in files_by_name[name]]
         behavior_files = [
             f
             for f in candidates

@@ -1,6 +1,6 @@
 import { Niivue } from "@niivue/niivue";
 import type { ViewerPreset } from "./viewer-presets";
-import { apiUrl } from "./api";
+import { fileBlob } from "./api";
 
 export async function viewFile(
   canvas: HTMLCanvasElement,
@@ -17,9 +17,7 @@ export async function viewFile(
   try {
     const files = [];
     for (const [index, file] of [{id: identity, path}, ...overlays].entries()) {
-      const response = await fetch(apiUrl(`artifacts/${encodeURIComponent(file.id)}/content`), {credentials:'include'});
-      if (!response.ok) throw new Error((await response.json()).detail ?? 'Image unavailable');
-      const url = URL.createObjectURL(await response.blob());
+      const url = URL.createObjectURL(await fileBlob(file.id));
       urls.push(url);
       files.push({url, name: file.path.split('/').pop(), ...(index ? {opacity:0.35} : {}),
         ...(mode === 'surfaces' ? {rgba255: new Uint8Array(index ? [230,139,40,255] : [52,119,197,255])} : {}),

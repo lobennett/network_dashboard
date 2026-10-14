@@ -42,6 +42,15 @@ it('separates known transformations and unknown history with recorded software',
  expect(panel.textContent).not.toContain('0 excluded');
 });
 
+it('lists stage outputs by short name with the full path available',()=>{
+ const file={id:'f',path:'sub-s03/ses-01/func/sub-s03_ses-01_task-rest_run-1_bold.nii.gz',dataset_id:'raw',content_id:'sha256:h',stage_basis:'recorded_transformation'};
+ const panel=stageReport(data,'bids',{...emptyStageRecord,stage:'bids',outputs:[file]},vi.fn());
+ const button=Array.from(panel.querySelectorAll<HTMLButtonElement>('.stage-file-row button'))[0];
+ expect(button.textContent).toBe('sub-s03_ses-01_task-rest_run-1_bold.nii.gz');
+ expect(button.title).toBe(file.path);
+ expect(panel.textContent).not.toContain('Use Current files');
+});
+
 it('only lists scans with evidence at the selected stage',async()=>{
  const {stageSubject}=await import('./stage-record');
  const scans={...data,entities:[{...scan,namespace:'raw',session:'01',task:'rest',run:'1'},{entity_key:'fmap',namespace:'raw',subject:'s03',session:'01',run:'1',suffix:'fieldmap'}]};
@@ -58,11 +67,13 @@ it('keeps provenance collapsed and review exclusions visible',()=>{
  expect(panel.querySelector('.stage-changes')?.closest('details')).toBeNull();
 });
 
-it('exposes inputs, changes, outputs and review needs without opening provenance',()=>{
+it('shows one stage sentence and review needs, with inputs and outputs collapsed once',()=>{
  const record={stage:'review',subject:'s03',processing:[],inputs:[],outputs:[],findings:[{finding_type:'scan-review',evidence_json:'{"approval_required":"yes","approved":"no","flags":"high_motion"}'}],decisions:[],milestones:[],snapshot_kind:'recorded_stage_evidence',note:'',supporting_files:[{id:'receipt',path:'code/scan_decisions.tsv',dataset_id:'raw',content_id:'sha256:h',purpose:'Scan decisions'}]};
  const open=vi.fn(),panel=stageReport(data,'review',record,open);
- expect(panel.querySelector('.stage-overview')?.textContent).toContain('Inputs');
- expect(panel.querySelector('.stage-overview')?.textContent).toContain('Outputs');
+ expect(panel.querySelector('.stage-overview')?.textContent).not.toContain('Inputs');
+ expect(panel.querySelector('.stage-overview p')?.textContent).toBe('Record preprocessing retention separately from task-model exclusions.');
+ expect(panel.querySelectorAll('.stage-io dt')).toHaveLength(4);
+ expect(panel.querySelector('.stage-supporting')?.textContent).toContain('High motion is a review flag');
  expect(panel.querySelector('.stage-check-summary')?.textContent).toContain('1 needs approval');
  const button=Array.from(panel.querySelectorAll('button')).find(b=>b.textContent==='Scan decisions')!;
  button.click();expect(open).toHaveBeenCalledWith(record.supporting_files[0]);
