@@ -51,7 +51,7 @@ the pipeline publishes its `fsqc-2.1.4` derivative. These support manual review;
 metric outliers do not approve or exclude a subject.
 
 Raw behavior is registered under `sourcedata/behavioral` before events are generated.
-In **Review data → Events & metadata → Events & design**, choose a raw CSV or an
-events table to inspect or download it. Raw CSV previews retain the original units.
+In **Review data**, select a scan, open **Events & design**, and choose a raw CSV or
+events table to inspect or download. Raw CSV previews retain the original units.
 The connector owns its SSH connection until you stop it; server-side disconnects
 still require reconnecting and completing Duo.
