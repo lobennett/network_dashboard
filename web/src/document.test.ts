@@ -102,3 +102,15 @@ it('cancels the table request when the preview closes',async()=>{
  await loading;
  expect(document.querySelector('dialog')).toBeNull();
 });
+
+it('keeps long stimulus text folded and available without executing markup',async()=>{
+ Object.defineProperty(HTMLDialogElement.prototype,'showModal',{value:vi.fn(),configurable:true});
+ const stimulus='<script>'+('raw stimulus '.repeat(20))+'</script>';
+ vi.stubGlobal('fetch',vi.fn().mockResolvedValue({ok:true,json:async()=>({kind:'behavior',columns:['stimulus','rt'],rows:[{stimulus,rt:'421'}],total_rows:1,total_columns:2,truncated:false})}));
+ await openRecordedFile('outside','behavior/sub-s1035/sub-s1035_flanker.csv');
+ const full=document.querySelector('td details')!;
+ expect(full.hasAttribute('open')).toBe(false);
+ expect(full.querySelector('pre')?.textContent).toBe(stimulus);
+ expect(full.querySelector('summary')?.getAttribute('aria-label')).toContain('stimulus');
+ expect(document.querySelector('script')).toBeNull();
+});

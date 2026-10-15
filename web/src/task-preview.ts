@@ -268,13 +268,25 @@ function designChart(table: Table): HTMLElement {
   return panel;
 }
 export function rawBehaviorTable(data: Table): HTMLElement {
-  const panel=element('section');
+  const panel=element('section','','raw-behavior');
   panel.append(element('p',`Raw behavior. Showing ${Math.min(data.rows.length,50)} of ${data.total_rows} rows and ${data.columns.length} of ${data.total_columns} columns; original units and values retained.`,'muted'));
   if(data.total_rows>50||data.truncated)panel.append(element('p','Download the recorded file for all rows and columns.','muted'));
-  const scroll=element('div','','table-scroll'),table=element('table'),head=element('tr');
-  data.columns.forEach(column=>head.append(element('th',column)));table.append(head);
-  for(const row of data.rows.slice(0,50)){const tr=element('tr');data.columns.forEach(column=>tr.append(element('td',row[column]??'')));table.append(tr);}
-  scroll.style.overflowX='auto';scroll.style.maxWidth='100%';scroll.append(table);panel.append(scroll);return panel;
+  const scroll=element('div','','table-scroll'),table=element('table'),head=element('thead'),header=element('tr'),body=element('tbody');
+  data.columns.forEach(column=>header.append(element('th',column)));head.append(header);
+  for(const row of data.rows.slice(0,50)){
+    const tr=element('tr');
+    for(const column of data.columns){
+      const value=row[column]??'',cell=element('td');
+      if(value.length>100){
+        const full=element('details'),summary=element('summary',value.slice(0,80)+'…');
+        summary.setAttribute('aria-label',`Expand full value: ${column}`);
+        full.append(summary,element('pre',value));cell.append(full);
+      }else cell.textContent=value;
+      tr.append(cell);
+    }
+    body.append(tr);
+  }
+  table.append(head,body);scroll.append(table);panel.append(scroll);return panel;
 }
 export async function taskPreview(
   host: HTMLElement,

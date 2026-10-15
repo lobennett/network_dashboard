@@ -25,7 +25,7 @@ export async function openRecordedFile(id: string, path: string) {
       if(!dialog.isConnected)return;
       const download=element('button','Download recorded file','text-button');
       download.onclick=async()=>{download.disabled=true;try{await downloadFile(id,path.split('/').pop()!);}catch(error){dialog.append(element('p',String(error),'gap'));}finally{download.disabled=false;}};
-      status.replaceWith(rawBehaviorTable(table),download);return;
+      status.replaceWith(download,rawBehaviorTable(table));return;
     }
     if(/\.(png|jpg)$/i.test(path)){
       const blob=await fileBlob(id,controller.signal);

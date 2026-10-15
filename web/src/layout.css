@@ -398,6 +398,14 @@ header {
 .coverage-evidence:not(:empty) { margin-top: 24px; border-top: 3px solid #8c1515; padding-top: 20px; }
 .behavior-summary { margin: 20px 0; }
 .behavior-summary th, .behavior-summary td { padding: 10px; text-align: left; border-bottom: 1px solid #ddd; }
+.raw-behavior .table-scroll {overflow:auto;max-width:100%;max-height:65vh;border:1px solid var(--rule);}
+.raw-behavior table {border-collapse:separate;border-spacing:0;font-size:13px;}
+.raw-behavior th,.raw-behavior td {padding:10px 12px;text-align:left;vertical-align:top;border-bottom:1px solid var(--rule);white-space:nowrap;}
+.raw-behavior th {position:sticky;top:0;background:var(--wash);z-index:1;}
+.raw-behavior tbody tr:nth-child(even) {background:var(--wash);}
+.raw-behavior details {width:260px;white-space:normal;overflow-wrap:anywhere;}
+.raw-behavior summary {cursor:pointer;color:var(--cardinal);}
+.raw-behavior pre {white-space:pre-wrap;max-height:240px;overflow:auto;font-size:12px;}
 @media(max-width:700px) { #coverage-page { padding: 18px; } .coverage-controls > input { width: 100%; } }
 
 .completion-checklist { border: 1px solid var(--rule); border-left: 3px solid var(--cardinal); padding: 14px 18px; margin: 16px 0; }
