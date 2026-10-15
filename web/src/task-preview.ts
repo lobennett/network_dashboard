@@ -1,4 +1,4 @@
-import { get, downloadFile } from "./api";
+import { get, fileTable, downloadFile } from "./api";
 import { element } from "./review";
 
 export type BehaviorSummary = {
@@ -88,8 +88,11 @@ type File = {
   dataset_id: string;
   content_id: string;
 };
+export const isBehaviorTable = (path: string) =>
+  /_beh\.csv$/i.test(path) ||
+  /(?:^|\/)behavior\/(sub-[A-Za-z0-9]+)\/\1_[^/]+\.csv$/i.test(path);
 export const isTaskTable = (path: string) =>
-  /_events\.tsv$/i.test(path) || /_beh\.csv$/i.test(path) ||
+  /_events\.tsv$/i.test(path) || isBehaviorTable(path) ||
   /(?:designmatrix|design_matrix|design-matrix).*\.(csv|tsv)$/i.test(path);
 const number = (value: string | undefined) =>
   value?.trim() && Number.isFinite(Number(value)) ? Number(value) : NaN;
@@ -266,7 +269,8 @@ function designChart(table: Table): HTMLElement {
 }
 export function rawBehaviorTable(data: Table): HTMLElement {
   const panel=element('section');
-  panel.append(element('p',`Raw behavior: ${data.total_rows} rows. First 50 rows shown; original units and values retained.`,'muted'));
+  panel.append(element('p',`Raw behavior. Showing ${Math.min(data.rows.length,50)} of ${data.total_rows} rows and ${data.columns.length} of ${data.total_columns} columns; original units and values retained.`,'muted'));
+  if(data.total_rows>50||data.truncated)panel.append(element('p','Download the recorded file for all rows and columns.','muted'));
   const scroll=element('div','','table-scroll'),table=element('table'),head=element('tr');
   data.columns.forEach(column=>head.append(element('th',column)));table.append(head);
   for(const row of data.rows.slice(0,50)){const tr=element('tr');data.columns.forEach(column=>tr.append(element('td',row[column]??'')));table.append(tr);}
@@ -288,7 +292,7 @@ export async function taskPreview(
       ? await get<File[]>(`artifacts?${query.replace(/&stage=events/, '&current=true')}&limit=1000`)
       : [];
     if (!active()) return;
-    const files = [...all.filter((f) => isTaskTable(f.path)), ...raw.filter(f=>/_beh\.csv$/i.test(f.path))];
+    const files = [...all.filter((f) => isTaskTable(f.path)), ...raw.filter(f=>isBehaviorTable(f.path))];
     const select = element("select");
     select.setAttribute("aria-label", "Raw behavior, event or saved design file");
     const display = element("div");
@@ -334,7 +338,7 @@ export async function taskPreview(
         element("p", "Fetching and verifying the recorded table…", "muted"),
       );
       try {
-        const table = await get<Table>(`artifacts/${file.id}/table`);
+        const table = await fileTable<Table>(file.id);
         if (!active() || current !== request) return;
         display.replaceChildren(element("p", file.path, "file-path"));
         const download = element("button", "Download recorded file", "text-button");

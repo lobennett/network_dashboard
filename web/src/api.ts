@@ -36,7 +36,7 @@ async function readResponse<T>(path: string, read: (response: Response) => Promi
     }
     return await read(response);
   } catch(error) {
-    if(timedOut) throw new Error(path.includes('/content')
+    if(timedOut) throw new Error(/\/(?:content|table)$/.test(path)
       ? 'File transfer timed out. The connector may still be downloading a large file; check its terminal and retry after the transfer finishes.'
       : 'Request timed out. Check the connector terminal for SSH errors, then retry. Restart connect if authentication expired.');
     throw error;
@@ -45,6 +45,9 @@ async function readResponse<T>(path: string, read: (response: Response) => Promi
 
 export function get<T>(path: string): Promise<T> {
   return readResponse(path, response => response.json());
+}
+export function fileTable<T>(id: string, signal?: AbortSignal): Promise<T> {
+  return readResponse(`artifacts/${encodeURIComponent(id)}/table`, response => response.json(), 1200000, signal);
 }
 export function fileBlob(id: string, signal?: AbortSignal): Promise<Blob> {
   return readResponse(`artifacts/${encodeURIComponent(id)}/content`, response => response.blob(), 1200000, signal);

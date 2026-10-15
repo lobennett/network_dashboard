@@ -80,3 +80,25 @@ def test_canonical_raw_behavior_is_previewed_without_reinterpreting_timing(tmp_p
     assert result['rows'][0]['rt']=='421'
     assert result['behavior'] is None
     assert result['nonmonotonic_pairs'] is None
+
+
+def test_out_of_scanner_behavior_uses_registered_path_and_original_values(tmp_path):
+    path = tmp_path / 'verified-object'
+    path.write_text('trial_id,rt,stimulus\ntest_trial,421,"left,right"\n')
+    name = 'behavior/sub-s1035/sub-s1035_flanker_single_task_network.csv'
+    result = read_table(path, name=name)
+    assert result['kind'] == 'behavior'
+    assert result['rows'] == [{'trial_id': 'test_trial', 'rt': '421', 'stimulus': 'left,right'}]
+    assert result['behavior'] is None
+    assert result['nonmonotonic_pairs'] is None
+
+
+@pytest.mark.parametrize('name', [
+    'qa/sub-s1035/sub-s1035_flanker.csv',
+    'behavior/sub-s1035/sub-s03_flanker.csv',
+])
+def test_unrelated_or_mismatched_behavior_paths_are_not_task_tables(tmp_path, name):
+    path = tmp_path / 'verified-object'
+    path.write_text('value\n1\n')
+    with pytest.raises(HTTPException):
+        read_table(path, name=name)

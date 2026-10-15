@@ -8,7 +8,7 @@ With uv, SSH, and a Sherlock account with russpold Oak access, use the
 to enter your SUNet ID and copy a personalized command. Alternatively:
 
 ```bash
-uvx --python 3.12 --from https://network-dashboard-devloganbennetts-projects.vercel.app/downloads/network_dashboard-0.9.2-py3-none-any.whl network-dashboard connect --ssh YOUR_SUNET_ID@login.sherlock.stanford.edu --study /oak/stanford/groups/russpold/data/network_grant/bids --index /oak/stanford/groups/russpold/data/network_grant/network-dashboard-v1/records.sqlite
+uvx --python 3.12 --from https://network-dashboard-devloganbennetts-projects.vercel.app/downloads/network_dashboard-0.9.3-py3-none-any.whl network-dashboard connect --ssh YOUR_SUNET_ID@login.sherlock.stanford.edu --study /oak/stanford/groups/russpold/data/network_grant/bids --index /oak/stanford/groups/russpold/data/network_grant/network-dashboard-v1/records.sqlite
 ```
 
 Complete authentication, leave the command running, and open the
@@ -53,5 +53,6 @@ metric outliers do not approve or exclude a subject.
 Raw behavior is registered under `sourcedata/behavioral` before events are generated.
 In **Review data**, select a scan, open **Events & design**, and choose a raw CSV or
 events table to inspect or download. Raw CSV previews retain the original units.
+Out-of-scanner behavior is under **Study → Data completeness → Behavior**.
 The connector owns its SSH connection until you stop it; server-side disconnects
 still require reconnecting and completing Duo.

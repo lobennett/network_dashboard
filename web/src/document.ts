@@ -1,13 +1,13 @@
-import {rawBehaviorTable,type Table} from './task-preview';
+import {isBehaviorTable,rawBehaviorTable,type Table} from './task-preview';
 import {receiptSummary} from './receipt';
-import { fileBlob, fileText, get, downloadFile } from "./api";
+import { fileBlob, fileText, fileTable, downloadFile } from "./api";
 import { element } from "./review";
 
 /** Fetch through the allowed origin; keep report scripts in an opaque sandbox. */
 export async function openRecordedFile(id: string, path: string) {
   const dialog = element("dialog", "", "document-preview");
-  const close = element("button", "Close report");
-  const status = element("p", "Fetching and verifying the report from Oak… First load may take longer; Close cancels the request.");
+  const close = element("button", "Close preview");
+  const status = element("p", "Fetching and verifying the file from Oak…");
   let blobUrl: string | undefined;
   const controller = new AbortController();
   close.onclick = () => dialog.close();
@@ -20,8 +20,8 @@ export async function openRecordedFile(id: string, path: string) {
   document.body.append(dialog);
   dialog.showModal();
   try {
-    if(/_beh\.csv$/i.test(path)){
-      const table=await get<Table>(`artifacts/${encodeURIComponent(id)}/table`);
+    if(isBehaviorTable(path)){
+      const table=await fileTable<Table>(id,controller.signal);
       if(!dialog.isConnected)return;
       const download=element('button','Download recorded file','text-button');
       download.onclick=async()=>{download.disabled=true;try{await downloadFile(id,path.split('/').pop()!);}catch(error){dialog.append(element('p',String(error),'gap'));}finally{download.disabled=false;}};

@@ -18,3 +18,9 @@ test('recognizes canonical raw behavior without treating arbitrary CSVs as desig
  expect(isTaskTable('sub-s03_task-flanker_beh.csv')).toBe(true);
  expect(isTaskTable('participants.csv')).toBe(false);
 });
+
+test('recognizes canonical out-of-scanner behavior without matching QA or another subject',()=>{
+ expect(isTaskTable('behavior/sub-s1035/sub-s1035_flanker_single_task_network.csv')).toBe(true);
+ expect(isTaskTable('qa/sub-s1035/sub-s1035_flanker.csv')).toBe(false);
+ expect(isTaskTable('behavior/sub-s1035/sub-s03_flanker.csv')).toBe(false);
+});

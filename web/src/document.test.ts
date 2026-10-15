@@ -75,10 +75,30 @@ it('counts actual BIDS-validator issues and links affected scans',async()=>{
  const link=document.querySelector<HTMLAnchorElement>('.receipt-summary a')!;
  expect(link?.getAttribute('href')).toContain('focus=');expect(link?.getAttribute('href')).toContain('sub-s03');
 });
-it('shows canonical raw behavior as a table with original units',async()=>{
+it.each(['sub-s03_task-flanker_beh.csv','behavior/sub-s1035/sub-s1035_flanker_single_task_network.csv'])('shows %s as a table with original units',async(path)=>{
  Object.defineProperty(HTMLDialogElement.prototype,'showModal',{value:vi.fn(),configurable:true});
  vi.stubGlobal('fetch',vi.fn().mockResolvedValue({ok:true,json:async()=>({kind:'behavior',columns:['rt'],rows:[{rt:'421'}],total_rows:1,total_columns:1,truncated:false})}));
- await openRecordedFile('raw','sub-s03_task-flanker_beh.csv');
+ await openRecordedFile('raw',path);
  expect(document.querySelector('td')?.textContent).toBe('421');
  expect(document.body.textContent).toContain('original units');
+ expect(document.body.textContent).toContain('Showing 1 of 1 rows');
+});
+
+it('labels truncated raw-table columns and keeps the full-file download available',async()=>{
+ Object.defineProperty(HTMLDialogElement.prototype,'showModal',{value:vi.fn(),configurable:true});
+ vi.stubGlobal('fetch',vi.fn().mockResolvedValue({ok:true,json:async()=>({kind:'behavior',columns:['rt'],rows:[{rt:'421'}],total_rows:1,total_columns:129,truncated:true})}));
+ await openRecordedFile('outside','behavior/sub-s1035/sub-s1035_survey.csv');
+ expect(document.body.textContent).toContain('1 of 129 columns');
+ expect(document.body.textContent).toContain('Download the recorded file for all rows and columns');
+});
+
+it('cancels the table request when the preview closes',async()=>{
+ Object.defineProperty(HTMLDialogElement.prototype,'showModal',{value:vi.fn(),configurable:true});
+ let signal:AbortSignal|undefined;
+ vi.stubGlobal('fetch',vi.fn((_url,options)=>new Promise((_resolve,reject)=>{signal=options.signal;signal!.addEventListener('abort',()=>reject(new DOMException('Aborted','AbortError')));} )));
+ const loading=openRecordedFile('outside','behavior/sub-s1035/sub-s1035_flanker.csv');
+ document.querySelector('dialog')!.dispatchEvent(new Event('close'));
+ expect(signal?.aborted).toBe(true);
+ await loading;
+ expect(document.querySelector('dialog')).toBeNull();
 });

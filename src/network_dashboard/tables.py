@@ -8,7 +8,9 @@ from fastapi import HTTPException
 
 def table_kind(path: str) -> str | None:
     name = Path(path).name.lower()
-    if name.endswith('_beh.csv'):
+    if name.endswith('_beh.csv') or re.search(
+        r'(?:^|/)behavior/(sub-[A-Za-z0-9]+)/\1_[^/]+\.csv$', path, re.IGNORECASE
+    ):
         return 'behavior'
     if name.endswith('_events.tsv'):
         return 'events'
@@ -21,11 +23,11 @@ def read_table(path: Path, *, name: str | None = None, max_rows=5000, max_column
     name = name or str(path)
     kind = table_kind(name)
     if not kind:
-        raise HTTPException(400, 'Choose an events TSV or a saved design-matrix CSV/TSV')
+        raise HTTPException(400, 'Choose a raw behavioral CSV, events TSV, or saved design table')
     if path.stat().st_size > 20 * 1024 * 1024:
         raise HTTPException(413, 'Table exceeds the 20 MB preview limit; download it to inspect locally')
     with path.open(newline='', encoding='utf-8-sig') as stream:
-        reader = csv.DictReader(stream, delimiter=',' if name.endswith('.csv') else '\t')
+        reader = csv.DictReader(stream, delimiter=',' if name.lower().endswith('.csv') else '\t')
         fields = reader.fieldnames or []
         if not fields or len(set(fields)) != len(fields):
             raise HTTPException(422, 'Table must have distinct column names')

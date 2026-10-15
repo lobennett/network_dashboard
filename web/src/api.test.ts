@@ -48,3 +48,12 @@ it('allows a large file to finish after the old two-minute cutoff',async()=>{
  const result=fileBlob('large');const checked=expect(result).resolves.toMatchObject({size:11,type:'text/plain;charset=utf-8'});
  await vi.advanceTimersByTimeAsync(125000);await checked;vi.useRealTimers();vi.unstubAllGlobals();
 });
+
+it('allows a first table transfer to finish after the records timeout',async()=>{
+ vi.useFakeTimers();
+ vi.stubGlobal('fetch',vi.fn((_url,options)=>new Promise((resolve,reject)=>{options.signal.addEventListener('abort',()=>reject(new DOMException('Aborted','AbortError')));setTimeout(()=>resolve(new Response('{"rows":[]}')),65000);} )));
+ const {fileTable}=await import('./api');
+ const checked=expect(fileTable('outside')).resolves.toEqual({rows:[]});
+ await vi.advanceTimersByTimeAsync(65000);await checked;
+ vi.useRealTimers();vi.unstubAllGlobals();
+});

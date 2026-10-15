@@ -1,6 +1,7 @@
-import { get, apiUrl, downloadFile } from "./api";
+import { fileTable, downloadFile } from "./api";
 import { element, details, type RecordRow } from "./review";
-import { behaviorSummary, type BehaviorSummary } from "./task-preview";
+import { behaviorSummary, isBehaviorTable, type BehaviorSummary } from "./task-preview";
+import { openRecordedFile } from "./document";
 export type CoverageScan = RecordRow & {
   subject: string;
   prefix: string;
@@ -39,7 +40,11 @@ function fileLink(file: { id: string; path: string }) {
     "file-path",
   );
   link.href = '#';
-  link.onclick = event => {event.preventDefault();void downloadFile(file.id,file.path.split('/').pop()!).catch(error=>{link.after(element('p',String(error),'gap'));});};
+  link.onclick = event => {
+    event.preventDefault();
+    if(isBehaviorTable(file.path)) void openRecordedFile(file.id,file.path);
+    else void downloadFile(file.id,file.path.split('/').pop()!).catch(error=>{link.after(element('p',String(error),'gap'));});
+  };
   link.target = "_blank";
   link.rel = "noopener";
   return link;
@@ -237,8 +242,8 @@ export function renderCoverage(
             element("p", "Loading verified event metrics…"),
           );
           try {
-            const result = await get<{ behavior: BehaviorSummary }>(
-              `artifacts/${scan.events[0].id}/table`,
+            const result = await fileTable<{ behavior: BehaviorSummary }>(
+              scan.events[0].id,
             );
             if (request !== metricRequest) return;
             evidence.replaceChildren(
